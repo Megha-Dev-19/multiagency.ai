@@ -14,6 +14,7 @@ import {
   CardContent,
   Input,
 } from "@/components";
+import { AssignmentsSection } from "@/components/admin/assignments-section";
 import { InternalListingSection } from "@/components/admin/internal-listing-form";
 import { ProjectBudgetPanel } from "@/components/admin/project-budget-panel";
 import { AdminError } from "@/components/admin-error";
@@ -155,26 +156,7 @@ function AdminProjectDetail() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted-foreground">Contributors</h2>
-        {contributors.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No contributors assigned.</p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {contributors.map((c) => (
-              <Card key={c.id}>
-                <CardContent className="p-4 space-y-1">
-                  <div className="text-sm font-medium">{c.name}</div>
-                  {c.role && <div className="text-xs text-muted-foreground">{c.role}</div>}
-                  {c.nearAccountId && (
-                    <div className="text-xs font-mono text-muted-foreground break-all">
-                      {c.nearAccountId}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+        <AssignmentsSection projectId={projectId!} />
       </section>
 
       <section className="space-y-3">
@@ -227,13 +209,11 @@ function NearnSubmissionsSection({ slug }: { slug: string }) {
   const query = useQuery(adminNearnSubmissionsQueryOptions(apiClient, slug));
   const contributorsQuery = useQuery(adminContributorsListQueryOptions(apiClient));
   const contributorByNearAccount = new Map(
-    (contributorsQuery.data?.data ?? [])
-      .filter((c): c is typeof c & { nearAccountId: string } => !!c.nearAccountId)
-      .map((c) => [c.nearAccountId, c]),
+    (contributorsQuery.data?.data ?? []).map((c) => [c.nearAccount, c]),
   );
   const addContributorMutation = useMutation({
-    mutationFn: (input: { name: string; nearAccountId: string }) =>
-      apiClient.contributors.create(input),
+    mutationFn: (input: { name: string; nearAccount: string }) =>
+      apiClient.contributors.create({ nearAccount: input.nearAccount, name: input.name }),
     onSuccess: (_data, vars) => {
       toast.success(`Added ${vars.name} as a contributor`);
       queryClient.invalidateQueries({ queryKey: adminContributorsListQueryKey });
@@ -301,17 +281,17 @@ function NearnSubmissionsSection({ slug }: { slug: string }) {
                     size="sm"
                     disabled={
                       addContributorMutation.isPending &&
-                      addContributorMutation.variables?.nearAccountId === s.user.publicKey
+                      addContributorMutation.variables?.nearAccount === s.user.publicKey
                     }
                     onClick={() =>
                       addContributorMutation.mutate({
                         name: s.user.name ?? s.user.username ?? s.user.publicKey!,
-                        nearAccountId: s.user.publicKey!,
+                        nearAccount: s.user.publicKey!,
                       })
                     }
                   >
                     {addContributorMutation.isPending &&
-                    addContributorMutation.variables?.nearAccountId === s.user.publicKey
+                    addContributorMutation.variables?.nearAccount === s.user.publicKey
                       ? "adding…"
                       : "+ add contributor"}
                   </Button>
@@ -419,10 +399,10 @@ function DeleteProjectSection({
 }
 
 type ProjectContributor = {
-  id: string;
+  nearAccount: string;
   name: string;
-  nearAccountId: string | null;
   role: string | null;
+  onboardingStatus?: string;
 };
 
 function BillingsSection({
@@ -593,41 +573,41 @@ function BillingCreateForm({
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const [proposalId, setProposalId] = useState("");
-  const [contributorIdOverride, setContributorIdOverride] = useState("");
+  const [nearAccountOverride, setNearAccountOverride] = useState("");
   const [note, setNote] = useState("");
 
   const tokensQuery = useQuery(adminTokensQueryOptions(apiClient));
   const tokens = tokensQuery.data?.tokens ?? [];
 
   const allContributorsQuery = useQuery(adminContributorsListQueryOptions(apiClient));
-  const onboardingById = new Map(
-    (allContributorsQuery.data?.data ?? []).map((c) => [c.id, c.onboardingStatus]),
+  const assignmentOnboarding = new Map(
+    contributors.map((c) => [c.nearAccount, c.onboardingStatus ?? "pending"]),
   );
 
-  const payableContributors = contributors.filter((c) => c.nearAccountId);
-  const [prefillContributorId, setPrefillContributorId] = useState<string>(
-    () => payableContributors[0]?.id ?? "",
+  const payableContributors = contributors.filter((c) => c.nearAccount);
+  const [prefillNearAccount, setPrefillNearAccount] = useState<string>(
+    () => payableContributors[0]?.nearAccount ?? "",
   );
   const [prefillTokenId, setPrefillTokenId] = useState<string>("");
 
-  const prefillContributor = payableContributors.find((c) => c.id === prefillContributorId);
+  const prefillContributor = payableContributors.find((c) => c.nearAccount === prefillNearAccount);
   const prefillToken = tokens.find((t) => t.tokenId === prefillTokenId);
 
-  const targetContributorId = contributorIdOverride.trim() || prefillContributorId;
-  const targetOnboardingStatus = targetContributorId
-    ? onboardingById.get(targetContributorId)
+  const targetNearAccount = nearAccountOverride.trim() || prefillNearAccount;
+  const targetOnboardingStatus = targetNearAccount
+    ? assignmentOnboarding.get(targetNearAccount)
     : undefined;
   const showOnboardingWarning =
     targetOnboardingStatus !== undefined && targetOnboardingStatus !== "complete";
   const targetContributorName =
-    contributors.find((c) => c.id === targetContributorId)?.name ??
-    allContributorsQuery.data?.data.find((c) => c.id === targetContributorId)?.name ??
+    contributors.find((c) => c.nearAccount === targetNearAccount)?.name ??
+    allContributorsQuery.data?.data.find((c) => c.nearAccount === targetNearAccount)?.name ??
     "this contributor";
 
   const trezuPrefillUrl =
     orgAccountId &&
     trezuPaymentUrl(orgAccountId, {
-      receiverAddress: prefillContributor?.nearAccountId ?? undefined,
+      receiverAddress: prefillContributor?.nearAccount ?? undefined,
       token: prefillToken
         ? {
             tokenId: prefillToken.tokenId,
@@ -643,7 +623,7 @@ function BillingCreateForm({
       apiClient.billings.create({
         projectId,
         proposalId: proposalId.trim(),
-        contributorId: contributorIdOverride || undefined,
+        nearAccount: nearAccountOverride || undefined,
         note: note.trim() || undefined,
       }),
     onSuccess: async () => {
@@ -673,13 +653,13 @@ function BillingCreateForm({
               <Field label="recipient" htmlFor="prefill-contributor">
                 <select
                   id="prefill-contributor"
-                  value={prefillContributorId}
-                  onChange={(e) => setPrefillContributorId(e.target.value)}
+                  value={prefillNearAccount}
+                  onChange={(e) => setPrefillNearAccount(e.target.value)}
                   className={selectClass}
                 >
                   {payableContributors.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.nearAccountId})
+                    <option key={c.nearAccount} value={c.nearAccount}>
+                      {c.name} ({c.nearAccount})
                     </option>
                   ))}
                 </select>
@@ -736,9 +716,9 @@ function BillingCreateForm({
         >
           <Input
             id="new-bill-contributor"
-            value={contributorIdOverride}
-            onChange={(e) => setContributorIdOverride(e.target.value)}
-            placeholder="contributor id (rare; leave blank to auto-detect)"
+            value={nearAccountOverride}
+            onChange={(e) => setNearAccountOverride(e.target.value)}
+            placeholder="near account (rare; leave blank to auto-detect)"
             disabled={isPending}
           />
         </Field>

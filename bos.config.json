@@ -46,6 +46,12 @@
       "secrets": [
         "PROJECTS_DATABASE_URL"
       ]
+    },
+    "contributors": {
+      "development": "local:plugins/builders",
+      "secrets": [
+        "BUILDERS_DATABASE_URL"
+      ]
     }
   }
 }

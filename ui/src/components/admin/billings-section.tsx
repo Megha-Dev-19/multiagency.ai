@@ -8,24 +8,47 @@ import { Field, selectClass } from "@/components/admin-form";
 import type { ApiClient } from "@/lib/api";
 import { useApiClient } from "@/lib/api";
 import { formatTokenAmount } from "@/lib/format-amount";
-import { adminContributorsListQueryOptions, adminProjectsListQueryOptions } from "@/lib/queries";
+import {
+  adminClientsListQueryOptions,
+  adminContributorsListQueryOptions,
+  adminProjectsListQueryOptions,
+} from "@/lib/queries";
 
 type Billing = Awaited<ReturnType<ApiClient["billings"]["list"]>>["data"][number];
 
-export function BillingsAdminSection() {
+type BillingsAdminSectionProps = {
+  readOnly?: boolean;
+  clientId?: string;
+  projectIds?: string[];
+};
+
+export function BillingsAdminSection({
+  readOnly = false,
+  clientId: fixedClientId,
+}: BillingsAdminSectionProps) {
   const apiClient = useApiClient();
   const [projectId, setProjectId] = useState("");
-  const [contributorId, setContributorId] = useState("");
+  const [nearAccount, setNearAccount] = useState("");
+  const [clientId, setClientId] = useState(fixedClientId ?? "");
 
   const projectsQuery = useQuery(adminProjectsListQueryOptions(apiClient));
   const contributorsQuery = useQuery(adminContributorsListQueryOptions(apiClient));
+  const clientsQuery = useQuery(adminClientsListQueryOptions(apiClient));
 
   const billingsQuery = useInfiniteQuery({
-    queryKey: ["admin", "billings", "list", projectId || null, contributorId || null],
+    queryKey: [
+      "admin",
+      "billings",
+      "list",
+      projectId || null,
+      nearAccount || null,
+      clientId || null,
+    ],
     queryFn: ({ pageParam }) =>
       apiClient.billings.list({
         projectId: projectId || undefined,
-        contributorId: contributorId || undefined,
+        nearAccount: nearAccount || undefined,
+        clientId: clientId || undefined,
         cursor: pageParam,
       }),
     initialPageParam: undefined as string | undefined,
@@ -43,9 +66,11 @@ export function BillingsAdminSection() {
   );
   const projects = projectsQuery.data?.data ?? [];
   const contributors = contributorsQuery.data?.data ?? [];
+  const clients = clientsQuery.data?.data ?? [];
   const projectById = new Map(projects.map((p) => [p.id, p]));
-  const contributorById = new Map(contributors.map((c) => [c.id, c]));
-  const filtersActive = projectId !== "" || contributorId !== "";
+  const contributorByNear = new Map(contributors.map((c) => [c.nearAccount, c]));
+  const filtersActive =
+    projectId !== "" || nearAccount !== "" || (!fixedClientId && clientId !== "");
 
   const columns: ColumnDef<Billing>[] = [
     {
@@ -77,14 +102,10 @@ export function BillingsAdminSection() {
       id: "contributor",
       header: "Contributor",
       accessorFn: (row) =>
-        row.contributorId
-          ? (contributorById.get(row.contributorId)?.name ?? row.contributorId)
-          : "",
+        row.nearAccount ? (contributorByNear.get(row.nearAccount)?.name ?? row.nearAccount) : "",
       cell: ({ row }) => {
-        const c = row.original.contributorId
-          ? contributorById.get(row.original.contributorId)
-          : null;
-        return <span className="text-sm">{c?.name ?? "—"}</span>;
+        const c = row.original.nearAccount ? contributorByNear.get(row.original.nearAccount) : null;
+        return <span className="text-sm">{c?.name ?? row.original.nearAccount ?? "—"}</span>;
       },
     },
     {
@@ -117,53 +138,73 @@ export function BillingsAdminSection() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardContent className="p-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto]">
-          <Field label="project" htmlFor="filter-project">
-            <select
-              id="filter-project"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">all projects</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="contributor" htmlFor="filter-contributor">
-            <select
-              id="filter-contributor"
-              value={contributorId}
-              onChange={(e) => setContributorId(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">all contributors</option>
-              {contributors.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="flex items-end">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!filtersActive}
-              onClick={() => {
-                setProjectId("");
-                setContributorId("");
-              }}
-            >
-              reset
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {!readOnly && (
+        <Card>
+          <CardContent className="p-5 grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto]">
+            <Field label="project" htmlFor="filter-project">
+              <select
+                id="filter-project"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                className={selectClass}
+              >
+                <option value="">all projects</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="contributor" htmlFor="filter-contributor">
+              <select
+                id="filter-contributor"
+                value={nearAccount}
+                onChange={(e) => setNearAccount(e.target.value)}
+                className={selectClass}
+              >
+                <option value="">all contributors</option>
+                {contributors.map((c) => (
+                  <option key={c.nearAccount} value={c.nearAccount}>
+                    {c.name ?? c.nearAccount}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {!fixedClientId && (
+              <Field label="client" htmlFor="filter-client">
+                <select
+                  id="filter-client"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">all clients</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!filtersActive}
+                onClick={() => {
+                  setProjectId("");
+                  setNearAccount("");
+                  if (!fixedClientId) setClientId("");
+                }}
+              >
+                reset
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <DataTable
         columns={columns}

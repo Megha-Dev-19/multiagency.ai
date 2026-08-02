@@ -17,10 +17,12 @@ import { createApplicationsService } from "./services/applications";
 import { createAssignmentsService } from "./services/assignments";
 import { createBillingsService } from "./services/billings";
 import { createBudgetsService } from "./services/budgets";
+import { createClientsService } from "./services/clients";
 import { createContributorsService } from "./services/contributors";
 import { createListingsService } from "./services/listings";
 import { createNearnService } from "./services/nearn";
 import { createProposalsService } from "./services/proposals";
+import { createReportsService } from "./services/reports";
 import {
   defaultPublicSettings,
   getResolvedPublicSettings,
@@ -84,11 +86,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
       lifecycle: flagsToLifecycle(listing),
     });
 
-    const applications = createApplicationsService(db, notifyConfig);
     const agency = createAgencyService(db, plugins);
     const listings = createListingsService(db);
-    const contributors = createContributorsService(db);
+    const contributors = createContributorsService(plugins);
+    const clients = createClientsService(db, plugins);
+    const reports = createReportsService(db, agency, plugins);
     const assignments = createAssignmentsService(db);
+    const applications = createApplicationsService(db, notifyConfig, contributors);
     const budgets = createBudgetsService(db);
     const billings = createBillingsService(db, agency);
     const proposals = createProposalsService(db, agency);
@@ -115,6 +119,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
           .use(auth.requireOrgRole("admin", "owner"))
           .handler(async ({ context, input }) =>
             runEffect(applications.update(context as any, input)),
+          ),
+
+        convertToBuilder: builder.applications.convertToBuilder
+          .use(auth.requireOrgRole("admin", "owner"))
+          .handler(async ({ context, input }) =>
+            runEffect(applications.convertToBuilder(context as any, input)),
           ),
       },
 
@@ -248,20 +258,67 @@ export default createPlugin.withPlugins<PluginsClient>()({
               );
             }),
         },
+
+        reports: {
+          generate: builder.agency.reports.generate
+            .use(auth.requireOrgRole("admin", "owner", "member"))
+            .handler(async ({ context, input }) => {
+              const orgId = getDaoAccountIdOrThrow(context);
+              return runEffect(reports.generate(context, orgId, input));
+            }),
+        },
+      },
+
+      clients: {
+        list: builder.clients.list
+          .use(auth.requireOrgRole("admin", "owner"))
+          .handler(async () => runEffect(clients.list())),
+
+        get: builder.clients.get
+          .use(auth.requireOrgRole("admin", "owner", "member"))
+          .handler(async ({ input }) => runEffect(clients.get(input.id))),
+
+        lookupByNearAccount: builder.clients.lookupByNearAccount
+          .use(auth.requireAuth)
+          .handler(async ({ input }) => {
+            const result = await runEffect(clients.lookupByNearAccount(input.nearAccountId));
+            return {
+              client: result?.client ?? null,
+              projectIds: result?.projectIds ?? [],
+            };
+          }),
+
+        create: builder.clients.create
+          .use(auth.requireOrgRole("admin", "owner"))
+          .handler(async ({ context, input }) => runEffect(clients.create(context, input))),
+
+        update: builder.clients.update
+          .use(auth.requireOrgRole("admin", "owner"))
+          .handler(async ({ input }) => runEffect(clients.update(input))),
+
+        delete: builder.clients.delete
+          .use(auth.requireOrgRole("admin", "owner"))
+          .handler(async ({ input }) => runEffect(clients.delete(input.id))),
       },
 
       contributors: {
         list: builder.contributors.list
           .use(auth.requireOrgRole("admin", "owner", "member"))
-          .handler(async () => runEffect(contributors.list())),
+          .handler(async ({ context }) => runEffect(contributors.list(context))),
+
+        get: builder.contributors.get
+          .use(auth.requireOrgRole("admin", "owner", "member"))
+          .handler(async ({ context, input }) =>
+            runEffect(contributors.get(context, input.nearAccount)),
+          ),
 
         create: builder.contributors.create
           .use(auth.requireOrgRole("admin", "owner"))
-          .handler(async ({ input }) => runEffect(contributors.create(input))),
+          .handler(async ({ context, input }) => runEffect(contributors.create(context, input))),
 
         update: builder.contributors.update
           .use(auth.requireOrgRole("admin", "owner"))
-          .handler(async ({ input }) => runEffect(contributors.update(input))),
+          .handler(async ({ context, input }) => runEffect(contributors.update(context, input))),
       },
 
       assignments: {
@@ -293,8 +350,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
                     projectId: row.projectId,
                     projectSlug: project.slug,
                     projectTitle: project.title,
-                    contributorId: row.contributorId,
+                    nearAccount: row.nearAccount,
                     role: row.role,
+                    onboardingStatus: row.onboardingStatus,
                     createdAt: row.createdAt,
                   };
                 })
@@ -316,6 +374,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
         delete: builder.assignments.delete
           .use(auth.requireOrgRole("admin", "owner", "member"))
           .handler(async ({ input }) => runEffect(assignments.delete(input))),
+
+        updateOnboarding: builder.assignments.updateOnboarding
+          .use(auth.requireOrgRole("admin", "owner", "member"))
+          .handler(async ({ context, input }) => {
+            const orgAccountId = getDaoAccountIdOrThrow(context);
+            return runEffect(
+              Effect.promise(() =>
+                agency.requireProjectInOrg(input.projectId, orgAccountId, context),
+              ).pipe(Effect.andThen(() => assignments.updateOnboarding(input))),
+            );
+          }),
       },
 
       budgets: {
@@ -332,6 +401,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 budgets.list({
                   projectIds: input.projectId ? [input.projectId] : null,
                   tokenId: input.tokenId,
+                  clientId: input.clientId,
                   cursor: input.cursor,
                   limit: input.limit,
                 }),
@@ -349,6 +419,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
             const budget = await runEffect(
               budgets.create({
                 projectId: input.projectId,
+                clientId: input.clientId ?? null,
                 tokenId: input.tokenId,
                 amount: input.amount,
                 note: input.note ?? null,

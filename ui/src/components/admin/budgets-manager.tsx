@@ -549,7 +549,13 @@ function TransferPanel({
   );
 }
 
-export function ProjectBudgetPanel({ projectId }: { projectId: string }) {
+export function ProjectBudgetPanel({
+  projectId,
+  readOnly = false,
+}: {
+  projectId: string;
+  readOnly?: boolean;
+}) {
   const apiClient = useApiClient();
   const { allocate, deallocate } = useBudgetActions(projectId);
 
@@ -647,68 +653,72 @@ export function ProjectBudgetPanel({ projectId }: { projectId: string }) {
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="font-display text-2xl uppercase tracking-tight font-extrabold leading-tight">
-          New budget
-        </h2>
-        <Card>
-          <CardContent className="p-5 grid gap-4">
-            <TokenAmountFields
-              idPrefix="budget"
-              tokens={tokens}
-              tokenSelection={tokenSelection}
-              setTokenSelection={setTokenSelection}
-              customTokenId={customTokenId}
-              setCustomTokenId={setCustomTokenId}
-              amount={amount}
-              setAmount={setAmount}
-              amountError={amountError}
-              disabled={isPending}
-            />
-            {showPreview && (
-              <div className="text-xs text-muted-foreground space-x-2">
-                <span>{effectiveTokenId} budget:</span>
-                <span className="font-mono tabular-nums">
-                  {formatTokenAmount(currentBudgetBigInt.toString(), effectiveTokenId)}
-                </span>
-                <span>→</span>
-                <span className={`font-mono ${previewBudgetBigInt < 0n ? "text-destructive" : ""}`}>
-                  {formatTokenAmount(previewBudgetBigInt.toString(), effectiveTokenId)}
-                </span>
-                {knownToken && (
-                  <span className="font-mono tabular-nums">
-                    ({amount.trim()} {knownToken.symbol} = {amountInBase})
-                  </span>
-                )}
-              </div>
-            )}
-            <Field label="note (optional)" htmlFor="budget-note">
-              <Input
-                id="budget-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+      {!readOnly && (
+        <section className="space-y-3">
+          <h2 className="font-display text-2xl uppercase tracking-tight font-extrabold leading-tight">
+            New budget
+          </h2>
+          <Card>
+            <CardContent className="p-5 grid gap-4">
+              <TokenAmountFields
+                idPrefix="budget"
+                tokens={tokens}
+                tokenSelection={tokenSelection}
+                setTokenSelection={setTokenSelection}
+                customTokenId={customTokenId}
+                setCustomTokenId={setCustomTokenId}
+                amount={amount}
+                setAmount={setAmount}
+                amountError={amountError}
                 disabled={isPending}
               />
-            </Field>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => createMutation.mutate()} disabled={!canSubmit}>
-                {createMutation.isPending ? "recording..." : "record budget"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => deallocateMutation.mutate()}
-                disabled={!canSubmit}
-              >
-                {deallocateMutation.isPending ? "recording..." : "record deallocation"}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Recorded to the audit log; nothing is executed on-chain. Project budgets are allowed
-              to go negative — over-budget is shown visually, not blocked.
-            </p>
-          </CardContent>
-        </Card>
-      </section>
+              {showPreview && (
+                <div className="text-xs text-muted-foreground space-x-2">
+                  <span>{effectiveTokenId} budget:</span>
+                  <span className="font-mono tabular-nums">
+                    {formatTokenAmount(currentBudgetBigInt.toString(), effectiveTokenId)}
+                  </span>
+                  <span>→</span>
+                  <span
+                    className={`font-mono ${previewBudgetBigInt < 0n ? "text-destructive" : ""}`}
+                  >
+                    {formatTokenAmount(previewBudgetBigInt.toString(), effectiveTokenId)}
+                  </span>
+                  {knownToken && (
+                    <span className="font-mono tabular-nums">
+                      ({amount.trim()} {knownToken.symbol} = {amountInBase})
+                    </span>
+                  )}
+                </div>
+              )}
+              <Field label="note (optional)" htmlFor="budget-note">
+                <Input
+                  id="budget-note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  disabled={isPending}
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => createMutation.mutate()} disabled={!canSubmit}>
+                  {createMutation.isPending ? "recording..." : "record budget"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => deallocateMutation.mutate()}
+                  disabled={!canSubmit}
+                >
+                  {deallocateMutation.isPending ? "recording..." : "record deallocation"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Recorded to the audit log; nothing is executed on-chain. Project budgets are allowed
+                to go negative — over-budget is shown visually, not blocked.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       <section className="space-y-3">
         <h2 className="font-display text-2xl uppercase tracking-tight font-extrabold leading-tight">

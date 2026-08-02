@@ -196,8 +196,8 @@ function TreasuryPage() {
         title: p.title,
       })),
       contributors: (adminContributorsQuery.data?.data ?? []).map((c) => ({
-        id: c.id,
-        name: c.name,
+        id: c.nearAccount,
+        name: c.name ?? c.nearAccount,
       })),
     };
   }, [canAccessAdmin, adminProjectsQuery.data, adminContributorsQuery.data]);
@@ -1303,7 +1303,7 @@ function ProposalBillingSection({
   const queryClient = useQueryClient();
   const { projects, contributors } = operatorContext;
   const [projectId, setProjectId] = useState("");
-  const [contributorId, setContributorId] = useState("");
+  const [nearAccount, setNearAccount] = useState("");
   const [note, setNote] = useState("");
 
   const invalidate = () =>
@@ -1315,7 +1315,7 @@ function ProposalBillingSection({
     mutationFn: async () =>
       apiClient.billings.create({
         projectId,
-        contributorId: contributorId || undefined,
+        nearAccount: nearAccount || undefined,
         proposalId: proposal.proposalId,
         note: note.trim() || undefined,
       }),
@@ -1421,8 +1421,8 @@ function ProposalBillingSection({
         </Field>
         <Field label="contributor" htmlFor={`record-contributor-${proposal.proposalId}`}>
           <Select
-            value={contributorId || NO_CONTRIBUTOR_SENTINEL}
-            onValueChange={(v) => setContributorId(v === NO_CONTRIBUTOR_SENTINEL ? "" : v)}
+            value={nearAccount || NO_CONTRIBUTOR_SENTINEL}
+            onValueChange={(v) => setNearAccount(v === NO_CONTRIBUTOR_SENTINEL ? "" : v)}
             disabled={recordMutation.isPending}
           >
             <SelectTrigger id={`record-contributor-${proposal.proposalId}`} className="w-full">

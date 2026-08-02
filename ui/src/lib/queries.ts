@@ -180,3 +180,37 @@ export function adminNearnSubmissionsQueryOptions(apiClient: ApiClient, slug: st
     retry: false,
   });
 }
+
+export const adminClientsListQueryKey = ["admin", "clients", "list"] as const;
+
+export function adminClientsListQueryOptions(apiClient: ApiClient) {
+  return queryOptions({
+    queryKey: adminClientsListQueryKey,
+    queryFn: () => apiClient.clients.list(),
+    retry: false,
+  });
+}
+
+export function adminClientDetailQueryOptions(apiClient: ApiClient, id: string) {
+  return queryOptions({
+    queryKey: ["admin", "clients", "detail", id] as const,
+    queryFn: () => apiClient.clients.get({ id }),
+    retry: false,
+  });
+}
+
+export function adminContributorDetailQueryOptions(apiClient: ApiClient, nearAccount: string) {
+  return queryOptions({
+    queryKey: ["admin", "contributors", "detail", nearAccount] as const,
+    queryFn: () => apiClient.contributors.get({ nearAccount }),
+    retry: false,
+  });
+}
+
+export function clientLookupQueryOptions(apiClient: ApiClient, nearAccountId: string) {
+  return queryOptions({
+    queryKey: ["client", "lookup", nearAccountId] as const,
+    queryFn: () => apiClient.clients.lookupByNearAccount({ nearAccountId }),
+    retry: false,
+  });
+}

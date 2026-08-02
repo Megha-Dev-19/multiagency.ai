@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
-import { billings, budgets, contributors, projectContributors } from "../db/schema";
+import { billings, budgets, projectContributors } from "../db/schema";
 import { getDaoAccountId } from "../lib/org";
 import type { PluginsClient } from "../lib/plugins-types.gen";
 import {
@@ -50,7 +50,7 @@ function toContractProject(
     description: p.description,
     repository: p.repository ?? null,
     nearnListingId,
-    kind: ((p as any).kind ?? "project") as "project" | "idea",
+    kind: ((p as any).kind ?? "project") as "project" | "idea" | "scope" | "result",
     status: p.status as "active" | "paused" | "archived",
     visibility: p.visibility as "public" | "unlisted" | "private",
     createdAt: new Date(p.createdAt),
@@ -233,20 +233,30 @@ export function createAgencyService(db: Database, plugins: PluginsClient) {
         const contributorRows = yield* Effect.promise(() =>
           db
             .select({
-              id: contributors.id,
-              name: contributors.name,
-              nearAccountId: contributors.nearAccountId,
+              nearAccount: projectContributors.nearAccount,
               role: projectContributors.role,
+              onboardingStatus: projectContributors.onboardingStatus,
             })
             .from(projectContributors)
-            .innerJoin(contributors, eq(projectContributors.contributorId, contributors.id))
             .where(eq(projectContributors.projectId, upstreamMatch.id))
             .orderBy(desc(projectContributors.createdAt)),
         );
 
+        const buildersResult = yield* Effect.promise(() =>
+          plugins.contributors(context).listBuilders({ limit: 100 }),
+        );
+        const builderByNear = new Map(
+          buildersResult.data.map((b) => [b.nearAccount, b.name ?? b.nearAccount]),
+        );
+
         return {
           project: toContractProject(upstreamMatch, link?.externalId ?? null, orgAccountId),
-          contributors: contributorRows,
+          contributors: contributorRows.map((r) => ({
+            nearAccount: r.nearAccount,
+            name: builderByNear.get(r.nearAccount) ?? r.nearAccount,
+            role: r.role,
+            onboardingStatus: r.onboardingStatus,
+          })),
         };
       }),
 
@@ -318,7 +328,7 @@ export function createAgencyService(db: Database, plugins: PluginsClient) {
         description?: string;
         repository: string;
         nearnListingId?: string;
-        kind?: "project" | "idea";
+        kind?: "project" | "idea" | "scope" | "result";
         status?: string;
         visibility?: string;
       },

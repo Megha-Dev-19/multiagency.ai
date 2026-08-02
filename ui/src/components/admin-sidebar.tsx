@@ -2,10 +2,12 @@ import { Link, useMatchRoute } from "@tanstack/react-router";
 
 const NAV_ITEMS = [
   { to: "/admin/projects", label: "projects" },
+  { to: "/admin/clients", label: "clients" },
   { to: "/admin/contributors", label: "contributors" },
   { to: "/admin/budgets", label: "budgets" },
   { to: "/admin/billings", label: "billings" },
   { to: "/admin/applications", label: "applications" },
+  { to: "/admin/reports", label: "reports" },
   { to: "/admin/settings", label: "settings" },
 ] as const;
 
