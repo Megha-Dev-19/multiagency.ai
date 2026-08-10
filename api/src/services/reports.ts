@@ -43,32 +43,31 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
         );
         const projectById = new Map(allProjects.map((p) => [p.id, p]));
 
-        const [budgetRows, billingRowsRaw, clientRows, clientLinkRows] = yield* Effect.promise(
-          () =>
-            Promise.all([
-              projectIds.length > 0
-                ? db.select().from(budgets).where(inArray(budgets.projectId, projectIds))
-                : Promise.resolve([]),
-              projectIds.length > 0
-                ? db
-                    .select()
-                    .from(billings)
-                    .where(
-                      and(
-                        inArray(billings.projectId, projectIds),
-                        input.clientId ? eq(billings.clientId, input.clientId) : undefined,
-                      ),
-                    )
-                    .orderBy(desc(billings.createdAt))
-                : Promise.resolve([]),
-              db.select().from(clients).orderBy(desc(clients.name)),
-              projectIds.length > 0
-                ? db
-                    .select()
-                    .from(clientProjects)
-                    .where(inArray(clientProjects.projectId, projectIds))
-                : Promise.resolve([]),
-            ]),
+        const [budgetRows, billingRowsRaw, clientRows, clientLinkRows] = yield* Effect.promise(() =>
+          Promise.all([
+            projectIds.length > 0
+              ? db.select().from(budgets).where(inArray(budgets.projectId, projectIds))
+              : Promise.resolve([]),
+            projectIds.length > 0
+              ? db
+                  .select()
+                  .from(billings)
+                  .where(
+                    and(
+                      inArray(billings.projectId, projectIds),
+                      input.clientId ? eq(billings.clientId, input.clientId) : undefined,
+                    ),
+                  )
+                  .orderBy(desc(billings.createdAt))
+              : Promise.resolve([]),
+            db.select().from(clients).orderBy(desc(clients.name)),
+            projectIds.length > 0
+              ? db
+                  .select()
+                  .from(clientProjects)
+                  .where(inArray(clientProjects.projectId, projectIds))
+              : Promise.resolve([]),
+          ]),
         );
 
         const billingRows = yield* Effect.promise(() =>

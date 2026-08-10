@@ -6,8 +6,8 @@ const NAV_ITEMS = [
   { to: "/admin/contributors", label: "contributors" },
   { to: "/admin/budgets", label: "budgets" },
   { to: "/admin/billings", label: "billings" },
-  { to: "/admin/applications", label: "applications" },
   { to: "/admin/reports", label: "reports" },
+  { to: "/admin/members", label: "members" },
   { to: "/admin/settings", label: "settings" },
 ] as const;
 

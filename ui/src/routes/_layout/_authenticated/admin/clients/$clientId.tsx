@@ -42,6 +42,10 @@ function AdminClientDetailPage() {
         <h1 className="font-display text-3xl sm:text-4xl font-black uppercase leading-none tracking-tight">
           {client.name}
         </h1>
+        <p className="text-sm text-muted-foreground max-w-2xl">
+          Edit this client&apos;s portal settings below. The NEAR account controls who can sign in
+          to the read-only client portal; linked projects determine what they can see.
+        </p>
       </header>
       <ClientDetailSection clientId={clientId} />
     </div>

@@ -151,6 +151,7 @@ export function createApplicationsService(
         yield* contributors.create(context, {
           nearAccount: app.nearAccountId,
           name: app.name,
+          bio: app.message ?? undefined,
         });
 
         const result = yield* Effect.promise(() =>

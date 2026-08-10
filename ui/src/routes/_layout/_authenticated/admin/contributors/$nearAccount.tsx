@@ -1,8 +1,8 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useMemo } from "react";
 import { Badge, Card, CardContent, DataTable } from "@/components";
+import { ContributorProfileForm } from "@/components/admin/contributors-section";
 import { AdminSectionError, AdminSectionSkeleton } from "@/components/admin-section-states";
 import { formatTokenAmount } from "@/lib/format-amount";
 import {
@@ -95,8 +95,6 @@ function ContributorDetailPage() {
     },
   ];
 
-  const skillsDisplay = useMemo(() => contributor.skills.join(", "), [contributor.skills]);
-
   return (
     <div className="space-y-8">
       <div>
@@ -108,7 +106,7 @@ function ContributorDetailPage() {
         </Link>
       </div>
 
-      <header className="space-y-3">
+      <header className="space-y-2">
         <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
           admin · contributors
         </div>
@@ -116,26 +114,17 @@ function ContributorDetailPage() {
           {contributor.name ?? nearAccount}
         </h1>
         <p className="font-mono text-sm text-muted-foreground">{nearAccount}</p>
-        {contributor.bio && <p className="text-sm max-w-2xl">{contributor.bio}</p>}
-        {!contributor.name && !contributor.bio && contributor.skills.length === 0 && (
-          <p className="text-sm text-muted-foreground max-w-2xl">
-            No builder profile yet — use + new contributor or convert from applications to add
-            name, skills, and bio.
-          </p>
-        )}
-        {skillsDisplay && (
-          <div className="flex flex-wrap gap-1">
-            {contributor.skills.map((s: string) => (
-              <Badge key={s} variant="outline">
-                {s}
-              </Badge>
-            ))}
-          </div>
-        )}
-        {contributor.location && (
-          <p className="text-sm text-muted-foreground">{contributor.location}</p>
-        )}
+        <p className="text-sm text-muted-foreground max-w-2xl">
+          Builder profile for project assignments and billing. Edit name, bio, skills, and links
+          below. This is separate from{" "}
+          <Link to="/admin/members" className="underline underline-offset-2 hover:text-foreground">
+            Members
+          </Link>
+          — contributors do not get admin access unless you invite them there too.
+        </p>
       </header>
+
+      <ContributorProfileForm nearAccount={nearAccount} contributor={contributor} />
 
       <Card>
         <CardContent className="p-5 grid gap-2 sm:grid-cols-3">

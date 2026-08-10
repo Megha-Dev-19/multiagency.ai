@@ -979,7 +979,6 @@ export const contract = oc.router({
           network: z.enum(["mainnet", "testnet"]),
           // Editable for admins of this deployment — resolved DB → env → hardcoded.
           editable: z.object({
-            daoAccountId: z.string().nullable(),
             nearnAccountId: z.string().nullable(),
             websiteUrl: z.string().nullable(),
             docsUrl: z.string().nullable(),
@@ -1008,7 +1007,6 @@ export const contract = oc.router({
       .route({ method: "PATCH", path: "/admin/settings" })
       .input(
         z.object({
-          daoAccountId: z.string().trim().min(1).max(120).nullable().optional(),
           nearnAccountId: z.string().trim().min(1).max(120).nullable(),
           websiteUrl: httpUrl.nullable(),
           docsUrl: httpUrl.nullable(),

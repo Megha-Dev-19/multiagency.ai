@@ -8,9 +8,7 @@ export const Route = createFileRoute("/_layout/_authenticated/admin/billings/")(
     meta: [{ title: "Billings | Admin" }],
   }),
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      adminProjectsListQueryOptions(context.apiClient),
-    );
+    await context.queryClient.ensureQueryData(adminProjectsListQueryOptions(context.apiClient));
   },
   pendingComponent: () => <AdminSectionSkeleton rows={5} />,
   errorComponent: ({ error, reset }) => <AdminSectionError error={error} onRetry={reset} />,

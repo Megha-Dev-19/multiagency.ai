@@ -89,7 +89,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const agency = createAgencyService(db, plugins);
     const listings = createListingsService(db);
     const contributors = createContributorsService(db, plugins);
-    const clients = createClientsService(db, plugins);
+    const clients = createClientsService(db);
     const reports = createReportsService(db, agency, plugins);
     const assignments = createAssignmentsService(db);
     const applications = createApplicationsService(db, notifyConfig, contributors);
@@ -575,7 +575,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
               orgAccountId: row?.orgAccountId ?? daoAccountId,
               network,
               editable: {
-                daoAccountId: row?.daoAccountId ?? null,
                 nearnAccountId: row?.nearnAccountId ?? base.nearnAccountId,
                 websiteUrl: row?.websiteUrl ?? base.websiteUrl,
                 docsUrl: row?.docsUrl ?? base.docsUrl,
@@ -607,7 +606,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
               db,
               settingsKey,
               {
-                daoAccountId: input.daoAccountId ?? null,
                 nearnAccountId: input.nearnAccountId,
                 websiteUrl: input.websiteUrl,
                 docsUrl: input.docsUrl,

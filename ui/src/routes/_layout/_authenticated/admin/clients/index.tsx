@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ClientsAdminSection } from "@/components/admin/clients-section";
 import { AdminSectionError, AdminSectionSkeleton } from "@/components/admin-section-states";
 import { adminClientsListQueryOptions } from "@/lib/queries";
@@ -24,6 +24,14 @@ function AdminClientsPage() {
         <h1 className="font-display text-3xl sm:text-4xl font-black uppercase leading-none tracking-tight">
           Clients
         </h1>
+        <p className="text-sm text-muted-foreground max-w-2xl">
+          Paying customers linked to projects and a read-only portal. Clients sign in with their
+          NEAR wallet — not email invites like{" "}
+          <Link to="/admin/members" className="underline underline-offset-2 hover:text-foreground">
+            Members
+          </Link>
+          .
+        </p>
       </header>
       <ClientsAdminSection />
     </div>

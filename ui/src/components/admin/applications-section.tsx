@@ -64,6 +64,16 @@ export function ApplicationsAdminSection() {
       ),
     },
     {
+      id: "message",
+      header: "Message",
+      accessorKey: "message",
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground line-clamp-2 max-w-xs">
+          {row.original.message ?? "—"}
+        </span>
+      ),
+    },
+    {
       id: "kind",
       header: "Kind",
       accessorKey: "kind",

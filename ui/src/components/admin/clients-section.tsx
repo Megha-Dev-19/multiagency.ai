@@ -1,13 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, CardContent, DataTable, Input } from "@/components";
 import { AdminError } from "@/components/admin-error";
 import { Field } from "@/components/admin-form";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { ApiClient } from "@/lib/api";
 import { useApiClient } from "@/lib/api";
+import { type AuthClient, useAuthClient } from "@/lib/auth";
 import { isValidNearAccountId } from "@/lib/near-account";
 import {
   adminClientsListQueryKey,
@@ -61,6 +69,21 @@ export function ClientsAdminSection() {
         </span>
       ),
     },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <Link
+          to="/admin/clients/$clientId"
+          params={{ clientId: row.original.id }}
+          className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground hover:underline"
+        >
+          edit
+        </Link>
+      ),
+    },
   ];
 
   return (
@@ -92,8 +115,107 @@ export function ClientsAdminSection() {
   );
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function isOrgAlreadyExistsError(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) return false;
+  if (error.code === "ORGANIZATION_ALREADY_EXISTS") return true;
+  const message = error.message?.toLowerCase() ?? "";
+  return message.includes("organization already exists");
+}
+
+/** Create a client Better Auth org, or reuse one left over from a failed prior attempt. */
+async function ensureClientOrgId(authClient: AuthClient, name: string): Promise<string> {
+  const trimmedName = name.trim();
+  const slug = slugify(trimmedName);
+
+  const created = await authClient.organization.create({
+    name: trimmedName,
+    slug,
+    metadata: { type: "client" },
+  });
+  if (created.data?.id) return created.data.id;
+
+  if (!isOrgAlreadyExistsError(created.error)) {
+    throw new Error(created.error?.message || "Failed to create client workspace");
+  }
+
+  const list = await authClient.organization.list();
+  const existing = (list.data ?? []).find((org) => org.slug === slug);
+  if (!existing?.id) {
+    throw new Error(
+      `Workspace slug "${slug}" is already taken. Pick a different client name, or ask a platform admin to remove the orphan org.`,
+    );
+  }
+  return existing.id;
+}
+
+type ProjectOption = { id: string; title: string };
+
+function LinkedProjectsPicker({
+  projects,
+  value,
+  onChange,
+  disabled,
+  id,
+}: {
+  projects: ProjectOption[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+  disabled?: boolean;
+  id?: string;
+}) {
+  const selected = projects.filter((p) => value.includes(p.id));
+  const label =
+    selected.length === 0
+      ? "Select projects…"
+      : selected.length === 1
+        ? selected[0]!.title
+        : `${selected.length} projects linked`;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          className="h-9 w-full justify-between px-3 font-normal"
+        >
+          <span className="truncate text-left">{label}</span>
+          <ChevronDown className="size-4 shrink-0 opacity-50" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-60 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
+      >
+        {projects.map((project) => (
+          <DropdownMenuCheckboxItem
+            key={project.id}
+            checked={value.includes(project.id)}
+            onCheckedChange={(checked) => {
+              onChange(checked ? [...value, project.id] : value.filter((id) => id !== project.id));
+            }}
+            onSelect={(e) => e.preventDefault()}
+          >
+            {project.title}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function ClientCreateForm({ onDone }: { onDone: () => void }) {
   const apiClient = useApiClient();
+  const authClient = useAuthClient();
   const queryClient = useQueryClient();
   const projectsQuery = useQuery(adminProjectsListQueryOptions(apiClient));
   const [name, setName] = useState("");
@@ -101,15 +223,30 @@ function ClientCreateForm({ onDone }: { onDone: () => void }) {
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
 
   const createMutation = useMutation({
-    mutationFn: async () =>
-      apiClient.clients.create({
-        name: name.trim(),
+    mutationFn: async () => {
+      const trimmedName = name.trim();
+      const orgId = await ensureClientOrgId(authClient, trimmedName);
+
+      const existing = (await apiClient.clients.list()).data.find((c) => c.orgId === orgId);
+      if (existing) {
+        return { client: existing, projectIds: selectedProjects, alreadyExists: true as const };
+      }
+
+      const result = await apiClient.clients.create({
+        orgId,
+        name: trimmedName,
         nearAccountId: nearAccountId.trim() || undefined,
         projectIds: selectedProjects.length > 0 ? selectedProjects : undefined,
-      }),
-    onSuccess: async () => {
+      });
+      return { ...result, alreadyExists: false as const };
+    },
+    onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: adminClientsListQueryKey });
-      toast.success("Client created");
+      toast.success(
+        result.alreadyExists
+          ? "Client workspace already existed — linked record restored"
+          : "Client created",
+      );
       onDone();
     },
     onError: (err: Error) => toast.error(err.message || "Failed to create client"),
@@ -148,23 +285,18 @@ function ClientCreateForm({ onDone }: { onDone: () => void }) {
           )}
         </Field>
         {projects.length > 0 && (
-          <Field label="linked projects" htmlFor="client-projects">
-            <select
+          <Field
+            label="linked projects"
+            htmlFor="client-projects"
+            helper="Select one or more projects this client can see in their portal."
+          >
+            <LinkedProjectsPicker
               id="client-projects"
-              multiple
+              projects={projects}
               value={selectedProjects}
-              onChange={(e) =>
-                setSelectedProjects(Array.from(e.target.selectedOptions, (o) => o.value))
-              }
-              className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              onChange={setSelectedProjects}
               disabled={createMutation.isPending}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
         )}
         <div className="flex gap-2">
@@ -230,6 +362,9 @@ export function ClientDetailSection({ clientId }: { clientId: string }) {
   return (
     <Card>
       <CardContent className="p-5 grid gap-4">
+        <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+          edit client
+        </div>
         <Field label="name" htmlFor="edit-client-name">
           <Input
             id="edit-client-name"
@@ -238,7 +373,11 @@ export function ClientDetailSection({ clientId }: { clientId: string }) {
             disabled={updateMutation.isPending}
           />
         </Field>
-        <Field label="near account (portal auth)" htmlFor="edit-client-near">
+        <Field
+          label="near account (portal auth)"
+          htmlFor="edit-client-near"
+          helper="Clients sign in with this NEAR wallet to access the portal."
+        >
           <Input
             id="edit-client-near"
             value={nearAccountId}
@@ -247,21 +386,18 @@ export function ClientDetailSection({ clientId }: { clientId: string }) {
           />
         </Field>
         {projects.length > 0 && (
-          <Field label="linked projects" htmlFor="edit-client-projects">
-            <select
+          <Field
+            label="linked projects"
+            htmlFor="edit-client-projects"
+            helper="Select one or more projects this client can see in their portal."
+          >
+            <LinkedProjectsPicker
               id="edit-client-projects"
-              multiple
+              projects={projects}
               value={projectIds}
-              onChange={(e) => setProjectIds(Array.from(e.target.selectedOptions, (o) => o.value))}
-              className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              onChange={setProjectIds}
               disabled={updateMutation.isPending}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
         )}
         <Button

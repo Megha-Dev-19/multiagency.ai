@@ -3,16 +3,8 @@ import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
 import { clientProjects, clients } from "../db/schema";
-import type { PluginsClient } from "../lib/plugins-types.gen";
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-export function createClientsService(db: Database, plugins: PluginsClient) {
+export function createClientsService(db: Database) {
   return {
     list: () =>
       Effect.gen(function* () {
@@ -51,28 +43,19 @@ export function createClientsService(db: Database, plugins: PluginsClient) {
       }),
 
     create: (
-      context: Record<string, unknown>,
-      input: { name: string; nearAccountId?: string; slug?: string; projectIds?: string[] },
+      _context: Record<string, unknown>,
+      input: { orgId: string; name: string; nearAccountId?: string; projectIds?: string[] },
     ) =>
       Effect.gen(function* () {
         const id = crypto.randomUUID();
         const now = new Date();
-        const orgSlug = input.slug?.trim() || slugify(input.name);
-
-        const org = yield* Effect.promise(() =>
-          plugins.auth(context).createOrganization({
-            name: input.name.trim(),
-            slug: orgSlug,
-            metadata: { type: "client" },
-          }),
-        );
 
         const [row] = yield* Effect.promise(() =>
           db
             .insert(clients)
             .values({
               id,
-              orgId: org.id,
+              orgId: input.orgId,
               name: input.name.trim(),
               nearAccountId: input.nearAccountId?.trim() || null,
               createdAt: now,

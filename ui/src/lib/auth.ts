@@ -182,6 +182,7 @@ export function useAuthClient(): AuthClient {
 }
 
 export const sessionQueryKey = ["session"] as const;
+export const organizationsListQueryKey = ["organizations", "list"] as const;
 
 export function sessionQueryOptions(
   authClient: AuthClient,

@@ -4,7 +4,7 @@ import { Building2, Check } from "lucide-react";
 import { useMemo } from "react";
 import { useAuthClient } from "@/app";
 import type { AuthClient } from "@/lib/auth";
-import { sessionQueryOptions } from "@/lib/auth";
+import { organizationsListQueryKey, sessionQueryOptions } from "@/lib/auth";
 import { isAgencyWorkspace } from "@/lib/org-metadata";
 import { invalidateWorkspaceQueries } from "@/lib/queries";
 import { Button } from "./ui/button";
@@ -43,7 +43,7 @@ export function OrgSwitcher() {
   const activeOrgId = session?.session?.activeOrganizationId ?? null;
 
   const orgsQuery = useQuery({
-    queryKey: ["organizations", "list"],
+    queryKey: organizationsListQueryKey,
     queryFn: async () => {
       const res = await auth.organization.list();
       return res.data ?? [];
