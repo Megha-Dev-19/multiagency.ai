@@ -1,17 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BillingsAdminSection } from "@/components/admin/billings-section";
 import { AdminSectionError, AdminSectionSkeleton } from "@/components/admin-section-states";
-import { adminContributorsListQueryOptions, adminProjectsListQueryOptions } from "@/lib/queries";
+import { adminProjectsListQueryOptions } from "@/lib/queries";
 
 export const Route = createFileRoute("/_layout/_authenticated/admin/billings/")({
   head: () => ({
     meta: [{ title: "Billings | Admin" }],
   }),
   loader: async ({ context }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(adminProjectsListQueryOptions(context.apiClient)),
-      context.queryClient.ensureQueryData(adminContributorsListQueryOptions(context.apiClient)),
-    ]);
+    await context.queryClient.ensureQueryData(
+      adminProjectsListQueryOptions(context.apiClient),
+    );
   },
   pendingComponent: () => <AdminSectionSkeleton rows={5} />,
   errorComponent: ({ error, reset }) => <AdminSectionError error={error} onRetry={reset} />,

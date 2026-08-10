@@ -33,6 +33,10 @@ export function createBillingsService(db: Database, agency: AgencyService) {
               (p: { id: string }) => p.id,
             );
 
+        if (projectIds.length === 0) {
+          return { data: [], nextCursor: null };
+        }
+
         const selectBillingCols = {
           id: billings.id,
           projectId: billings.projectId,

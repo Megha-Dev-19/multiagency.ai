@@ -448,7 +448,9 @@ function BillingsSection({
         />
       )}
 
-      {billingsQuery.isLoading ? (
+      {billingsQuery.isError ? (
+        <AdminError error={billingsQuery.error} />
+      ) : billingsQuery.isLoading ? (
         <Loading label="Loading billings..." />
       ) : billings.length > 0 ? (
         <>

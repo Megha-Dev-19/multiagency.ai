@@ -1,5 +1,7 @@
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
+import type { Database } from "../db";
+import { projectContributors } from "../db/schema";
 import type { PluginsClient } from "../lib/plugins-types.gen";
 
 export type BuilderProfile = {
@@ -35,27 +37,52 @@ function toProfile(data: {
   };
 }
 
-export function createContributorsService(plugins: PluginsClient) {
+function stubProfile(nearAccount: string): BuilderProfile {
+  const now = new Date().toISOString();
+  return {
+    nearAccount,
+    name: null,
+    bio: null,
+    skills: [],
+    location: null,
+    links: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function createContributorsService(db: Database, plugins: PluginsClient) {
   return {
     list: (context: Record<string, unknown>) =>
       Effect.gen(function* () {
         const result = yield* Effect.promise(() =>
-          plugins.contributors(context).listBuilders({ limit: 100 }),
+          plugins.builders(context).listBuilders({ limit: 100 }),
         );
-        return { data: result.data.map(toProfile) };
+        const byNear = new Map(result.data.map((row) => [row.nearAccount, toProfile(row)]));
+
+        const assignmentRows = yield* Effect.promise(() =>
+          db
+            .selectDistinct({ nearAccount: projectContributors.nearAccount })
+            .from(projectContributors),
+        );
+        for (const row of assignmentRows) {
+          if (!byNear.has(row.nearAccount)) {
+            byNear.set(row.nearAccount, stubProfile(row.nearAccount));
+          }
+        }
+
+        return { data: [...byNear.values()] };
       }),
 
     get: (context: Record<string, unknown>, nearAccount: string) =>
       Effect.gen(function* () {
         try {
           const result = yield* Effect.promise(() =>
-            plugins.contributors(context).getBuilder({ nearAccount }),
+            plugins.builders(context).getBuilder({ nearAccount }),
           );
           return { contributor: toProfile(result.data) };
         } catch {
-          return yield* Effect.fail(
-            new ORPCError("NOT_FOUND", { message: "Contributor not found" }),
-          );
+          return { contributor: stubProfile(nearAccount) };
         }
       }),
 
@@ -77,7 +104,7 @@ export function createContributorsService(plugins: PluginsClient) {
           );
         }
         const result = yield* Effect.promise(() =>
-          plugins.contributors(context).createBuilder({
+          plugins.builders(context).createBuilder({
             nearAccount: input.nearAccount.trim(),
             name: input.name,
             bio: input.bio,
@@ -103,7 +130,7 @@ export function createContributorsService(plugins: PluginsClient) {
       Effect.gen(function* () {
         try {
           const result = yield* Effect.promise(() =>
-            plugins.contributors(context).updateBuilderProfile({
+            plugins.builders(context).updateBuilderProfile({
               nearAccount: input.nearAccount,
               name: input.name,
               bio: input.bio,
@@ -114,9 +141,17 @@ export function createContributorsService(plugins: PluginsClient) {
           );
           return { contributor: toProfile(result.data) };
         } catch {
-          return yield* Effect.fail(
-            new ORPCError("NOT_FOUND", { message: "Contributor not found" }),
+          const created = yield* Effect.promise(() =>
+            plugins.builders(context).createBuilder({
+              nearAccount: input.nearAccount,
+              name: input.name,
+              bio: input.bio,
+              skills: input.skills,
+              location: input.location,
+              links: input.links,
+            }),
           );
+          return { contributor: toProfile(created.data) };
         }
       }),
   };

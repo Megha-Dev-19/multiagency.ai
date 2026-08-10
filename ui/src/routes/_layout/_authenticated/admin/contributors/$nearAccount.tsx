@@ -123,6 +123,12 @@ function ContributorDetailPage() {
         </h1>
         <p className="font-mono text-sm text-muted-foreground">{nearAccount}</p>
         {contributor.bio && <p className="text-sm max-w-2xl">{contributor.bio}</p>}
+        {!contributor.name && !contributor.bio && contributor.skills.length === 0 && (
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            No builder profile yet — use + new contributor or convert from applications to add
+            name, skills, and bio.
+          </p>
+        )}
         {skillsDisplay && (
           <div className="flex flex-wrap gap-1">
             {contributor.skills.map((s: string) => (

@@ -1,5 +1,8 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
+import type { AnyRouter } from "@tanstack/react-router";
 import type { ApiClient } from "./api";
+import { sessionQueryKey } from "./auth";
 import { getNetwork } from "./network";
 
 // Loader-hit queries include the active network in their queryKey so data
@@ -213,4 +216,26 @@ export function clientLookupQueryOptions(apiClient: ApiClient, nearAccountId: st
     queryFn: () => apiClient.clients.lookupByNearAccount({ nearAccountId }),
     retry: false,
   });
+}
+
+export async function invalidateWorkspaceQueries(
+  queryClient: QueryClient,
+  router: Pick<AnyRouter, "invalidate">,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: sessionQueryKey }),
+    queryClient.invalidateQueries({ queryKey: ["organizations"] }),
+    queryClient.invalidateQueries({ queryKey: ["members"] }),
+    queryClient.invalidateQueries({ queryKey: meRolesQueryKey }),
+    queryClient.invalidateQueries({ queryKey: projectsListQueryKey }),
+    queryClient.invalidateQueries({ queryKey: teamListQueryKey }),
+    queryClient.invalidateQueries({ queryKey: publicSettingsQueryKey }),
+    queryClient.invalidateQueries({ queryKey: adminSettingsQueryKey }),
+    queryClient.invalidateQueries({ queryKey: ["treasury"] }),
+    queryClient.invalidateQueries({ queryKey: ["proposals"] }),
+    queryClient.invalidateQueries({ queryKey: ["admin"] }),
+    queryClient.invalidateQueries({ queryKey: ["client"] }),
+    queryClient.invalidateQueries({ queryKey: tokensListQueryKey }),
+    router.invalidate(),
+  ]);
 }

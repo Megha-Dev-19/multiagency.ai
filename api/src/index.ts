@@ -88,7 +88,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
     const agency = createAgencyService(db, plugins);
     const listings = createListingsService(db);
-    const contributors = createContributorsService(plugins);
+    const contributors = createContributorsService(db, plugins);
     const clients = createClientsService(db, plugins);
     const reports = createReportsService(db, agency, plugins);
     const assignments = createAssignmentsService(db);

@@ -65,10 +65,27 @@ export function BillingsAdminSection({
     [billingsQuery.data],
   );
   const projects = projectsQuery.data?.data ?? [];
-  const contributors = contributorsQuery.data?.data ?? [];
   const clients = clientsQuery.data?.data ?? [];
+  const contributorOptions = useMemo(() => {
+    const byNear = new Map((contributorsQuery.data?.data ?? []).map((c) => [c.nearAccount, c]));
+    for (const b of billings) {
+      if (b.nearAccount && !byNear.has(b.nearAccount)) {
+        byNear.set(b.nearAccount, {
+          nearAccount: b.nearAccount,
+          name: null,
+          bio: null,
+          skills: [],
+          location: null,
+          links: null,
+          createdAt: "",
+          updatedAt: "",
+        });
+      }
+    }
+    return [...byNear.values()];
+  }, [contributorsQuery.data?.data, billings]);
   const projectById = new Map(projects.map((p) => [p.id, p]));
-  const contributorByNear = new Map(contributors.map((c) => [c.nearAccount, c]));
+  const contributorByNear = new Map(contributorOptions.map((c) => [c.nearAccount, c]));
   const filtersActive =
     projectId !== "" || nearAccount !== "" || (!fixedClientId && clientId !== "");
 
@@ -104,8 +121,18 @@ export function BillingsAdminSection({
       accessorFn: (row) =>
         row.nearAccount ? (contributorByNear.get(row.nearAccount)?.name ?? row.nearAccount) : "",
       cell: ({ row }) => {
-        const c = row.original.nearAccount ? contributorByNear.get(row.original.nearAccount) : null;
-        return <span className="text-sm">{c?.name ?? row.original.nearAccount ?? "—"}</span>;
+        const near = row.original.nearAccount;
+        if (!near) return <span className="text-sm text-muted-foreground">—</span>;
+        const c = contributorByNear.get(near);
+        return (
+          <Link
+            to="/admin/contributors/$nearAccount"
+            params={{ nearAccount: near }}
+            className="text-sm underline hover:text-foreground"
+          >
+            {c?.name ?? near}
+          </Link>
+        );
       },
     },
     {
@@ -164,7 +191,7 @@ export function BillingsAdminSection({
                 className={selectClass}
               >
                 <option value="">all contributors</option>
-                {contributors.map((c) => (
+                {contributorOptions.map((c) => (
                   <option key={c.nearAccount} value={c.nearAccount}>
                     {c.name ?? c.nearAccount}
                   </option>

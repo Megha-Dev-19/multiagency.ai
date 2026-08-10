@@ -90,7 +90,7 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
         );
 
         const buildersResult = yield* Effect.promise(() =>
-          plugins.contributors(context).listBuilders({ limit: 100 }),
+          plugins.builders(context).listBuilders({ limit: 100 }),
         );
         const builderByNear = new Map(
           buildersResult.data.map((b) => [b.nearAccount, b.name ?? b.nearAccount]),
