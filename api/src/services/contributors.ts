@@ -11,20 +11,24 @@ export type BuilderProfile = {
   skills: string[];
   location: string | null;
   links: Record<string, string> | null;
+  registered: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
-function toProfile(data: {
-  nearAccount: string;
-  name: string | null;
-  bio: string | null;
-  skills: string[];
-  location: string | null;
-  links: Record<string, string> | null;
-  createdAt: string;
-  updatedAt: string;
-}): BuilderProfile {
+function toProfile(
+  data: {
+    nearAccount: string;
+    name: string | null;
+    bio: string | null;
+    skills: string[];
+    location: string | null;
+    links: Record<string, string> | null;
+    createdAt: string;
+    updatedAt: string;
+  },
+  registered = true,
+): BuilderProfile {
   return {
     nearAccount: data.nearAccount,
     name: data.name,
@@ -32,6 +36,7 @@ function toProfile(data: {
     skills: data.skills,
     location: data.location,
     links: data.links,
+    registered,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
@@ -46,6 +51,7 @@ function stubProfile(nearAccount: string): BuilderProfile {
     skills: [],
     location: null,
     links: null,
+    registered: false,
     createdAt: now,
     updatedAt: now,
   };

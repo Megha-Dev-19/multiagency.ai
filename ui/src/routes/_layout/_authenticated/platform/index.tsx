@@ -149,12 +149,14 @@ function CreateOrgForm({ onCreated }: { onCreated: () => void }) {
         slug: finalSlug,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       });
+      if (org.error) throw new Error(org.error.message || "Failed to create workspace");
       if (!org.data?.id) throw new Error("Failed to create workspace");
-      await authClient.organization.inviteMember({
+      const invite = await authClient.organization.inviteMember({
         email: adminEmail.trim(),
         role: "admin",
         organizationId: org.data.id,
       });
+      if (invite.error) throw new Error(invite.error.message || "Failed to invite admin");
       return org.data;
     },
     onSuccess: (org) => {

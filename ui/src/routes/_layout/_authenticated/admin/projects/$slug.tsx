@@ -402,7 +402,6 @@ type ProjectContributor = {
   nearAccount: string;
   name: string;
   role: string | null;
-  onboardingStatus?: string;
 };
 
 function BillingsSection({
@@ -582,9 +581,6 @@ function BillingCreateForm({
   const tokens = tokensQuery.data?.tokens ?? [];
 
   const allContributorsQuery = useQuery(adminContributorsListQueryOptions(apiClient));
-  const assignmentOnboarding = new Map(
-    contributors.map((c) => [c.nearAccount, c.onboardingStatus ?? "pending"]),
-  );
 
   const payableContributors = contributors.filter((c) => c.nearAccount);
   const [prefillNearAccount, setPrefillNearAccount] = useState<string>(
@@ -596,14 +592,14 @@ function BillingCreateForm({
   const prefillToken = tokens.find((t) => t.tokenId === prefillTokenId);
 
   const targetNearAccount = nearAccountOverride.trim() || prefillNearAccount;
-  const targetOnboardingStatus = targetNearAccount
-    ? assignmentOnboarding.get(targetNearAccount)
-    : undefined;
-  const showOnboardingWarning =
-    targetOnboardingStatus !== undefined && targetOnboardingStatus !== "complete";
+  const targetContributor = allContributorsQuery.data?.data.find(
+    (c) => c.nearAccount === targetNearAccount,
+  );
+  const showBuilderWarning = !!targetNearAccount && targetContributor?.registered !== true;
   const targetContributorName =
     contributors.find((c) => c.nearAccount === targetNearAccount)?.name ??
-    allContributorsQuery.data?.data.find((c) => c.nearAccount === targetNearAccount)?.name ??
+    targetContributor?.name ??
+    targetNearAccount ??
     "this contributor";
 
   const trezuPrefillUrl =
@@ -734,21 +730,19 @@ function BillingCreateForm({
             className={textareaClass}
           />
         </Field>
-        {showOnboardingWarning && (
+        {showBuilderWarning && (
           <Alert>
             <AlertTriangle />
-            <AlertTitle>
-              Onboarding {targetOnboardingStatus} for {targetContributorName}
-            </AlertTitle>
+            <AlertTitle>Not registered as a builder: {targetContributorName}</AlertTitle>
             <AlertDescription>
-              Confirm signed services agreement and tax form (W-9 or W-8BEN) are on file before
-              recording a payout.{" "}
+              Convert the contributor application to a builder profile, or add them as a builder,
+              before recording a payout.{" "}
               <Link
                 to="/docs/$slug"
                 params={{ slug: "contributors" }}
                 className="underline underline-offset-2"
               >
-                onboarding flow ↗
+                contributor flow ↗
               </Link>
             </AlertDescription>
           </Alert>

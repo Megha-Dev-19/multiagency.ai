@@ -20,7 +20,6 @@ export function createAssignmentsService(db: Database) {
             projectId: r.projectId,
             nearAccount: r.nearAccount,
             role: r.role,
-            onboardingStatus: r.onboardingStatus,
             createdAt: r.createdAt,
           })),
         };
@@ -36,7 +35,6 @@ export function createAssignmentsService(db: Database) {
             projectId: r.projectId,
             nearAccount: r.nearAccount,
             role: r.role,
-            onboardingStatus: r.onboardingStatus,
             createdAt: r.createdAt,
           })),
         };
@@ -54,12 +52,7 @@ export function createAssignmentsService(db: Database) {
         return { data: rows };
       }),
 
-    create: (input: {
-      projectId: string;
-      nearAccount: string;
-      role?: string;
-      onboardingStatus?: "pending" | "complete" | "expired";
-    }) =>
+    create: (input: { projectId: string; nearAccount: string; role?: string }) =>
       Effect.gen(function* () {
         if (!input.nearAccount?.trim()) {
           return yield* Effect.fail(
@@ -74,13 +67,11 @@ export function createAssignmentsService(db: Database) {
               projectId: input.projectId,
               nearAccount: input.nearAccount.trim(),
               role: input.role ?? null,
-              onboardingStatus: input.onboardingStatus ?? "pending",
             })
             .onConflictDoUpdate({
               target: [projectContributors.projectId, projectContributors.nearAccount],
               set: {
                 role: input.role ?? null,
-                onboardingStatus: input.onboardingStatus ?? "pending",
               },
             }),
         );
@@ -89,34 +80,7 @@ export function createAssignmentsService(db: Database) {
           projectId: input.projectId,
           nearAccount: input.nearAccount.trim(),
           role: input.role ?? null,
-          onboardingStatus: input.onboardingStatus ?? ("pending" as const),
         };
-      }),
-
-    updateOnboarding: (input: {
-      projectId: string;
-      nearAccount: string;
-      onboardingStatus: "pending" | "complete" | "expired";
-    }) =>
-      Effect.gen(function* () {
-        const result = yield* Effect.promise(() =>
-          db
-            .update(projectContributors)
-            .set({ onboardingStatus: input.onboardingStatus })
-            .where(
-              and(
-                eq(projectContributors.projectId, input.projectId),
-                eq(projectContributors.nearAccount, input.nearAccount),
-              ),
-            )
-            .returning(),
-        );
-        if (!result[0]) {
-          return yield* Effect.fail(
-            new ORPCError("NOT_FOUND", { message: "Assignment not found" }),
-          );
-        }
-        return { ok: true as const };
       }),
 
     delete: (input: { projectId: string; nearAccount: string }) =>

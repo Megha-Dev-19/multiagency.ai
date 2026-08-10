@@ -106,11 +106,6 @@ export function AssignmentsSection({ projectId, readOnly = false }: AssignmentsS
                   <div className="text-xs text-muted-foreground">
                     {a.role ?? "—"}
                     <span className="ml-2 font-mono">{a.nearAccount}</span>
-                    {a.onboardingStatus && (
-                      <Badge variant="outline" className="ml-2 text-[10px]">
-                        {a.onboardingStatus}
-                      </Badge>
-                    )}
                   </div>
                   {(otherProjectsByContributor.get(a.nearAccount) ?? []).length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-1">

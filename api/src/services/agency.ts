@@ -235,7 +235,6 @@ export function createAgencyService(db: Database, plugins: PluginsClient) {
             .select({
               nearAccount: projectContributors.nearAccount,
               role: projectContributors.role,
-              onboardingStatus: projectContributors.onboardingStatus,
             })
             .from(projectContributors)
             .where(eq(projectContributors.projectId, upstreamMatch.id))
@@ -255,7 +254,6 @@ export function createAgencyService(db: Database, plugins: PluginsClient) {
             nearAccount: r.nearAccount,
             name: builderByNear.get(r.nearAccount) ?? r.nearAccount,
             role: r.role,
-            onboardingStatus: r.onboardingStatus,
           })),
         };
       }),

@@ -36,7 +36,6 @@ export type BudgetListItem = Pick<
   Budget,
   | "id"
   | "projectId"
-  | "clientId"
   | "tokenId"
   | "amount"
   | "note"
@@ -48,7 +47,6 @@ export type BudgetListItem = Pick<
 export interface ListBudgetsInput {
   projectIds: string[] | null;
   tokenId?: string;
-  clientId?: string;
   cursor?: string;
   limit: number;
 }
@@ -69,7 +67,6 @@ export async function listBudgets(
     .select({
       id: budgets.id,
       projectId: budgets.projectId,
-      clientId: budgets.clientId,
       tokenId: budgets.tokenId,
       amount: budgets.amount,
       note: budgets.note,
@@ -82,7 +79,6 @@ export async function listBudgets(
       and(
         input.projectIds !== null ? inArray(budgets.projectId, input.projectIds) : undefined,
         input.tokenId ? eq(budgets.tokenId, input.tokenId) : undefined,
-        input.clientId ? eq(budgets.clientId, input.clientId) : undefined,
         cursorWhere(budgets.createdAt, budgets.id, input.cursor),
       ),
     )
@@ -98,7 +94,6 @@ export async function listBudgets(
 
 export interface CreateBudgetInput {
   projectId: string;
-  clientId?: string | null;
   tokenId: string;
   amount: string;
   note: string | null;
@@ -112,7 +107,6 @@ export async function createBudget(db: Database, input: CreateBudgetInput): Prom
     .values({
       id,
       projectId: input.projectId,
-      clientId: input.clientId ?? null,
       tokenId: input.tokenId,
       amount: input.amount,
       note: input.note,

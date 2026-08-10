@@ -145,11 +145,6 @@ export const projectContributors = agency.table(
     projectId: text("project_id").notNull(),
     nearAccount: text("near_account").notNull(),
     role: text("role"),
-    onboardingStatus: text("onboarding_status", {
-      enum: ["pending", "complete", "expired"],
-    })
-      .notNull()
-      .default("pending"),
     createdAt: timestamp("created_at", { withTimezone: false }).notNull().default(sql`now()`),
   },
   (t) => ({
@@ -163,7 +158,6 @@ export const budgets = agency.table(
   {
     id: text("id").primaryKey(),
     projectId: text("project_id").notNull(),
-    clientId: text("client_id").references(() => clients.id, { onDelete: "set null" }),
     tokenId: text("token_id").notNull(),
     amount: text("amount").notNull(),
     note: text("note"),
@@ -174,7 +168,6 @@ export const budgets = agency.table(
   (t) => ({
     cursor: index("budgets_cursor").on(t.createdAt, t.id),
     projectIdx: index("budgets_project_id").on(t.projectId),
-    clientIdx: index("budgets_client_id").on(t.clientId),
   }),
 );
 

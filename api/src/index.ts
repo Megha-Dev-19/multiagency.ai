@@ -352,7 +352,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
                     projectTitle: project.title,
                     nearAccount: row.nearAccount,
                     role: row.role,
-                    onboardingStatus: row.onboardingStatus,
                     createdAt: row.createdAt,
                   };
                 })
@@ -374,17 +373,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         delete: builder.assignments.delete
           .use(auth.requireOrgRole("admin", "owner", "member"))
           .handler(async ({ input }) => runEffect(assignments.delete(input))),
-
-        updateOnboarding: builder.assignments.updateOnboarding
-          .use(auth.requireOrgRole("admin", "owner", "member"))
-          .handler(async ({ context, input }) => {
-            const orgAccountId = getDaoAccountIdOrThrow(context);
-            return runEffect(
-              Effect.promise(() =>
-                agency.requireProjectInOrg(input.projectId, orgAccountId, context),
-              ).pipe(Effect.andThen(() => assignments.updateOnboarding(input))),
-            );
-          }),
       },
 
       budgets: {
@@ -401,7 +389,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 budgets.list({
                   projectIds: input.projectId ? [input.projectId] : null,
                   tokenId: input.tokenId,
-                  clientId: input.clientId,
                   cursor: input.cursor,
                   limit: input.limit,
                 }),
@@ -419,7 +406,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
             const budget = await runEffect(
               budgets.create({
                 projectId: input.projectId,
-                clientId: input.clientId ?? null,
                 tokenId: input.tokenId,
                 amount: input.amount,
                 note: input.note ?? null,

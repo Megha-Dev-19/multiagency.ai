@@ -66,7 +66,11 @@ export function UserNav() {
   const authClient = useAuthClient();
   const apiClient = useApiClient();
 
-  const { data: session } = useQuery(sessionQueryOptions(authClient));
+  const { data: session } = useQuery({
+    ...sessionQueryOptions(authClient, undefined, { disableCookieCache: true }),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
   const user = session?.user;
   const nearAccountId = authClient.near.getAccountId();
   const { data: profile } = useQuery({

@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
-import { billings, budgets, clientProjects, clients, projectContributors } from "../db/schema";
+import { billings, budgets, clientProjects, clients } from "../db/schema";
 import type { PluginsClient } from "../lib/plugins-types.gen";
 import type { AgencyService } from "./agency";
 import { enrichWithChainStatus } from "./sputnik";
@@ -43,19 +43,11 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
         );
         const projectById = new Map(allProjects.map((p) => [p.id, p]));
 
-        const [budgetRows, billingRowsRaw, _assignmentRows, clientRows, clientLinkRows] =
-          yield* Effect.promise(() =>
+        const [budgetRows, billingRowsRaw, clientRows, clientLinkRows] = yield* Effect.promise(
+          () =>
             Promise.all([
               projectIds.length > 0
-                ? db
-                    .select()
-                    .from(budgets)
-                    .where(
-                      and(
-                        inArray(budgets.projectId, projectIds),
-                        input.clientId ? eq(budgets.clientId, input.clientId) : undefined,
-                      ),
-                    )
+                ? db.select().from(budgets).where(inArray(budgets.projectId, projectIds))
                 : Promise.resolve([]),
               projectIds.length > 0
                 ? db
@@ -69,12 +61,6 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
                     )
                     .orderBy(desc(billings.createdAt))
                 : Promise.resolve([]),
-              projectIds.length > 0
-                ? db
-                    .select()
-                    .from(projectContributors)
-                    .where(inArray(projectContributors.projectId, projectIds))
-                : Promise.resolve([]),
               db.select().from(clients).orderBy(desc(clients.name)),
               projectIds.length > 0
                 ? db
@@ -83,7 +69,7 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
                     .where(inArray(clientProjects.projectId, projectIds))
                 : Promise.resolve([]),
             ]),
-          );
+        );
 
         const billingRows = yield* Effect.promise(() =>
           Promise.all(billingRowsRaw.map((b) => enrichWithChainStatus(db, b as any, orgAccountId))),
@@ -146,10 +132,10 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
           for (const pid of pids) {
             const project = projectById.get(pid);
             const allocated = budgetRows
-              .filter((b) => b.projectId === pid && (!input.clientId || b.clientId === clientId))
+              .filter((b) => b.projectId === pid)
               .reduce((acc, b) => acc + BigInt(b.amount), 0n);
             const spent = paidBillings
-              .filter((b) => b.projectId === pid && (!input.clientId || b.clientId === clientId))
+              .filter((b) => b.projectId === pid)
               .reduce((acc, b) => acc + BigInt(b.amount), 0n);
             clientBreakdown.push({
               clientName: client.name,

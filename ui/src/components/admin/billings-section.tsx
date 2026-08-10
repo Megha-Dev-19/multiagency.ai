@@ -77,6 +77,7 @@ export function BillingsAdminSection({
           skills: [],
           location: null,
           links: null,
+          registered: false,
           createdAt: "",
           updatedAt: "",
         });

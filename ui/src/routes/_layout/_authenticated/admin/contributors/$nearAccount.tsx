@@ -68,12 +68,6 @@ function ContributorDetailPage() {
       ),
     },
     { id: "role", header: "Role", accessorKey: "role" },
-    {
-      id: "onboarding",
-      header: "Onboarding",
-      accessorKey: "onboardingStatus",
-      cell: ({ row }) => <Badge variant="outline">{row.original.onboardingStatus}</Badge>,
-    },
   ];
 
   const billingColumns: ColumnDef<(typeof billings)[number]>[] = [
