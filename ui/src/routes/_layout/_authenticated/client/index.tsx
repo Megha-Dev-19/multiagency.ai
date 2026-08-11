@@ -1,20 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Badge, Card, CardContent } from "@/components";
+import { AdminError } from "@/components/admin-error";
 import { BillingsAdminSection } from "@/components/admin/billings-section";
+import { TokenAmountCell } from "@/components/token-amounts";
 import { useApiClient } from "@/lib/api";
-import { adminProjectsListQueryOptions } from "@/lib/queries";
+import {
+  clientPortalDashboardSummaryQueryOptions,
+  clientPortalProjectsListQueryOptions,
+} from "@/lib/queries";
+import { tokenDisplayName } from "@/lib/report-amounts";
 
 export const Route = createFileRoute("/_layout/_authenticated/client/")({
   component: ClientHome,
 });
 
 function ClientHome() {
-  const { client, projectIds } = Route.useRouteContext();
+  const { client, agencyDaoAccountId } = Route.useRouteContext();
   const apiClient = useApiClient();
-  const projectsQuery = useQuery(adminProjectsListQueryOptions(apiClient));
+  const projectsQuery = useQuery(
+    clientPortalProjectsListQueryOptions(apiClient, agencyDaoAccountId),
+  );
+  const summaryQuery = useQuery(
+    clientPortalDashboardSummaryQueryOptions(apiClient, agencyDaoAccountId),
+  );
+  const clientProjects = projectsQuery.data?.data ?? [];
+  const remaining = summaryQuery.data?.remainingByToken ?? [];
 
-  const clientProjects = (projectsQuery.data?.data ?? []).filter((p) => projectIds.includes(p.id));
+  if (summaryQuery.isError) {
+    return <AdminError error={summaryQuery.error} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -22,17 +37,27 @@ function ClientHome() {
         <Card>
           <CardContent className="p-4">
             <div className="text-xs uppercase text-muted-foreground">Projects</div>
-            <div className="font-display text-3xl font-black">{clientProjects.length}</div>
+            <div className="font-display text-3xl font-black">
+              {summaryQuery.data?.projectCount ?? clientProjects.length}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-xs uppercase text-muted-foreground">Client</div>
-            <div className="text-sm font-medium">{client.name}</div>
-            {client.nearAccountId && (
-              <div className="font-mono text-[10px] text-muted-foreground mt-1">
-                {client.nearAccountId}
-              </div>
+            <div className="text-xs uppercase text-muted-foreground">Budget remaining</div>
+            {remaining.length === 0 ? (
+              <div className="font-display text-2xl font-black mt-1">—</div>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {remaining.map((row) => (
+                  <li key={row.tokenId} className="text-sm">
+                    <span className="text-muted-foreground mr-1">
+                      {tokenDisplayName(row.tokenId)}:
+                    </span>
+                    <TokenAmountCell amount={row.amount} tokenId={row.tokenId} />
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>
@@ -42,6 +67,7 @@ function ClientHome() {
             <Badge variant="outline" className="mt-1">
               read-only
             </Badge>
+            <div className="text-sm font-medium mt-2">{client.name}</div>
           </CardContent>
         </Card>
       </div>
@@ -50,7 +76,12 @@ function ClientHome() {
         <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
           recent billings
         </h2>
-        <BillingsAdminSection readOnly clientId={client.id} />
+        <BillingsAdminSection
+          readOnly
+          clientPortal
+          clientId={client.id}
+          agencyDaoAccountId={agencyDaoAccountId}
+        />
       </section>
     </div>
   );

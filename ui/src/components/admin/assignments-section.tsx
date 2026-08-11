@@ -47,9 +47,9 @@ export function AssignmentsSection({ projectId, readOnly = false }: AssignmentsS
       await invalidate();
       setNearAccount("");
       setRole("");
-      toast.success("Contributor assigned");
+      toast.success("Builder assigned");
     },
-    onError: (err: Error) => toast.error(err.message || "Failed to assign contributor"),
+    onError: (err: Error) => toast.error(err.message || "Failed to assign builder"),
   });
 
   const removeMutation = useMutation({
@@ -57,9 +57,9 @@ export function AssignmentsSection({ projectId, readOnly = false }: AssignmentsS
       apiClient.assignments.delete({ projectId, nearAccount: account }),
     onSuccess: async () => {
       await invalidate();
-      toast.success("Contributor unassigned");
+      toast.success("Builder unassigned");
     },
-    onError: (err: Error) => toast.error(err.message || "Failed to unassign contributor"),
+    onError: (err: Error) => toast.error(err.message || "Failed to unassign builder"),
   });
 
   const assigned = assignmentsQuery.data?.data ?? [];
@@ -82,10 +82,10 @@ export function AssignmentsSection({ projectId, readOnly = false }: AssignmentsS
   return (
     <div className="space-y-3">
       <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-        contributors
+        builders
       </div>
       {assigned.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No contributors assigned.</p>
+        <p className="text-xs text-muted-foreground">No builders assigned.</p>
       ) : (
         <div className="space-y-2">
           {assigned.map((a) => {
@@ -142,7 +142,7 @@ export function AssignmentsSection({ projectId, readOnly = false }: AssignmentsS
               disabled={addMutation.isPending}
               className={selectClass}
             >
-              <option value="">— pick contributor —</option>
+              <option value="">— pick builder —</option>
               {available.map((c) => {
                 const others = otherProjectsByContributor.get(c.nearAccount) ?? [];
                 const suffix =
@@ -174,9 +174,9 @@ export function AssignmentsSection({ projectId, readOnly = false }: AssignmentsS
         !readOnly &&
         allContributors.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            No contributors yet. Create some on{" "}
+            No builders yet. Add them on{" "}
             <Link to="/admin/contributors" className="underline">
-              the contributors page
+              the builders page
             </Link>
             .
           </p>

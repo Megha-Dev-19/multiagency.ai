@@ -101,7 +101,7 @@ export function ContributorsAdminSection() {
           variant={creating ? "outline" : "default"}
           className="font-display uppercase tracking-wide"
         >
-          {creating ? "cancel" : "+ new contributor"}
+          {creating ? "cancel" : "+ new builder"}
         </Button>
       </header>
 
@@ -113,10 +113,10 @@ export function ContributorsAdminSection() {
         isLoading={contributorsQuery.isLoading}
         error={contributorsQuery.error}
         onRetry={() => contributorsQuery.refetch()}
-        emptyMessage="No contributors yet. Create your first one above."
-        csvFilename="contributors"
-        viewId="admin-contributors"
-        searchPlaceholder="Search contributors…"
+        emptyMessage="No builders yet. Create your first one above."
+        csvFilename="builders"
+        viewId="admin-builders"
+        searchPlaceholder="Search builders…"
       />
     </div>
   );
@@ -145,10 +145,10 @@ function ContributorCreateForm({ onDone }: { onDone: () => void }) {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: adminContributorsListQueryKey });
-      toast.success("Contributor created");
+      toast.success("Builder created");
       onDone();
     },
-    onError: (err: Error) => toast.error(err.message || "Failed to create contributor"),
+    onError: (err: Error) => toast.error(err.message || "Failed to create builder"),
   });
 
   const isPending = createMutation.isPending;
@@ -235,7 +235,7 @@ function ContributorCreateForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="flex gap-2">
           <Button onClick={() => createMutation.mutate()} disabled={!canSubmit}>
-            {isPending ? "creating..." : "create contributor"}
+            {isPending ? "creating..." : "create builder"}
           </Button>
           <Button onClick={onDone} variant="outline" disabled={isPending}>
             cancel

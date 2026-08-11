@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -136,12 +137,18 @@ export function MembersAdminSection() {
     <div className="space-y-8">
       <section className="space-y-3">
         <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          invite member
+          invite team member
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
           Email invitations join this agency workspace. Admins can manage projects, clients, and
-          settings. This does not create a contributor profile — add builders separately under
-          Contributors.
+          settings. This does not create a builder profile — add builders separately under{" "}
+          <Link
+            to="/admin/contributors"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Builders
+          </Link>
+          .
         </p>
         <AddMemberForm
           onAdded={invalidateAll}
@@ -156,7 +163,7 @@ export function MembersAdminSection() {
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
           Invites sent but not yet accepted. Resend or cancel here; once accepted, the person
-          appears in Active members below.
+          appears in Current team below.
         </p>
         {invitationsQuery.isError ? (
           <AdminError error={invitationsQuery.error} />
@@ -173,7 +180,7 @@ export function MembersAdminSection() {
 
       <section className="space-y-3">
         <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          current members ({members.length})
+          current team ({members.length})
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
           People who accepted an invite and belong to this workspace. Change roles or remove access

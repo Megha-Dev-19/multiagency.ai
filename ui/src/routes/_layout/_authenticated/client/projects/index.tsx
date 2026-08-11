@@ -3,18 +3,20 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components";
 import { useApiClient } from "@/lib/api";
-import { adminProjectsListQueryOptions } from "@/lib/queries";
+import { clientPortalProjectsListQueryOptions } from "@/lib/queries";
 
 export const Route = createFileRoute("/_layout/_authenticated/client/projects/")({
   component: ClientProjectsPage,
 });
 
 function ClientProjectsPage() {
-  const { projectIds } = Route.useRouteContext();
+  const { agencyDaoAccountId } = Route.useRouteContext();
   const apiClient = useApiClient();
-  const projectsQuery = useQuery(adminProjectsListQueryOptions(apiClient));
-
-  const projects = (projectsQuery.data?.data ?? []).filter((p) => projectIds.includes(p.id));
+  const projectsQuery = useQuery(
+    clientPortalProjectsListQueryOptions(apiClient, agencyDaoAccountId),
+  );
+  const projects = projectsQuery.data?.data ?? [];
+  const search = { agency: agencyDaoAccountId };
 
   const columns: ColumnDef<(typeof projects)[number]>[] = [
     {
@@ -25,6 +27,7 @@ function ClientProjectsPage() {
         <Link
           to="/client/projects/$slug"
           params={{ slug: row.original.slug }}
+          search={search}
           className="font-display text-sm uppercase font-bold hover:underline"
         >
           {row.original.title}
@@ -52,9 +55,12 @@ function ClientProjectsPage() {
         your projects
       </h2>
       <DataTable
+        readOnly
         columns={columns}
         data={projects}
         isLoading={projectsQuery.isLoading}
+        error={projectsQuery.error}
+        onRetry={() => projectsQuery.refetch()}
         emptyMessage="No projects linked to your client account yet."
         csvFilename="client-projects"
         viewId="client-projects"

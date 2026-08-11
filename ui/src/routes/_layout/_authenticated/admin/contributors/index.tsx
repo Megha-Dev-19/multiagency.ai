@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components";
 import { ApplicationsAdminSection } from "@/components/admin/applications-section";
 import { ContributorsAdminSection } from "@/components/admin/contributors-section";
 import { AdminSectionError, AdminSectionSkeleton } from "@/components/admin-section-states";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components";
 import { adminContributorsListQueryOptions } from "@/lib/queries";
 
 const contributorsSearchSchema = z.object({
@@ -12,7 +12,7 @@ const contributorsSearchSchema = z.object({
 
 export const Route = createFileRoute("/_layout/_authenticated/admin/contributors/")({
   head: () => ({
-    meta: [{ title: "Contributors | Admin" }],
+    meta: [{ title: "Builders | Admin" }],
   }),
   validateSearch: contributorsSearchSchema,
   loader: ({ context }) =>
@@ -31,13 +31,13 @@ function AdminContributorsPage() {
     <div className="space-y-6">
       <header className="space-y-2">
         <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          admin · contributors
+          people · builders
         </div>
         <h1 className="font-display text-3xl sm:text-4xl font-black uppercase leading-none tracking-tight">
-          Contributors
+          Builders
         </h1>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          Builders who do project work — profiles, skills, and assignments.
+          People who do project work. Assign them from a project page; manage profiles here.
         </p>
       </header>
 
@@ -51,23 +51,13 @@ function AdminContributorsPage() {
         }}
       >
         <TabsList variant="line" className="font-mono text-[11px] uppercase tracking-[0.18em]">
-          <TabsTrigger value="directory">directory</TabsTrigger>
-          <TabsTrigger value="incoming">incoming</TabsTrigger>
+          <TabsTrigger value="directory">active</TabsTrigger>
+          <TabsTrigger value="incoming">applications</TabsTrigger>
         </TabsList>
-        <TabsContent value="directory" className="mt-6 space-y-4">
-          <p className="text-sm text-muted-foreground max-w-2xl">
-            People already on the team as builders. Create profiles manually or convert accepted
-            applications from Incoming. Assign them to projects from the project detail page.
-          </p>
+        <TabsContent value="directory" className="mt-6">
           <ContributorsAdminSection />
         </TabsContent>
-        <TabsContent value="incoming" className="mt-6 space-y-4">
-          <p className="text-sm text-muted-foreground max-w-2xl">
-            Applications not yet on the team. Accept contributor applications, then use{" "}
-            <span className="font-mono text-[11px]">convert to builder</span> to add them to the
-            directory. Founder and client applications are tracked here but follow different paths
-            (not converted to builders).
-          </p>
+        <TabsContent value="incoming" className="mt-6">
           <ApplicationsAdminSection />
         </TabsContent>
       </Tabs>

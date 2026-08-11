@@ -3,27 +3,34 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, CardContent } from "@/components";
-import { Field } from "@/components/admin-form";
+import { ReportPreview, reportOverviewCsvValues } from "@/components/admin/report-preview";
+import { Field, selectClass } from "@/components/admin-form";
+import { ReportNoteField } from "@/components/report-note-field";
 import { useApiClient } from "@/lib/api";
 import { type CsvColumn, csvTimestamp, downloadCsv } from "@/lib/csv";
+import { formatAllocatedSpent } from "@/lib/report-amounts";
 
 export const Route = createFileRoute("/_layout/_authenticated/client/reports/")({
   component: ClientReportsPage,
 });
 
 function ClientReportsPage() {
-  const { client } = Route.useRouteContext();
+  const { agencyDaoAccountId } = Route.useRouteContext();
   const apiClient = useApiClient();
   const [note, setNote] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [report, setReport] = useState<Awaited<
-    ReturnType<typeof apiClient.agency.reports.generate>
+    ReturnType<typeof apiClient.clientPortal.reports.generate>
   > | null>(null);
 
   const generateMutation = useMutation({
     mutationFn: () =>
-      apiClient.agency.reports.generate({
-        clientId: client.id,
+      apiClient.clientPortal.reports.generate({
+        agencyDaoAccountId,
         note: note.trim() || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
       }),
     onSuccess: (data) => {
       setReport(data);
@@ -34,16 +41,17 @@ function ClientReportsPage() {
 
   const handleDownload = () => {
     if (!report) return;
+    const overview = reportOverviewCsvValues(report.overview);
     const rows = [
       ...report.clientBreakdown.map((r) => ({
         section: "Project",
         label: r.projectTitle,
-        value: `allocated: ${r.budgetAllocated}, spent: ${r.budgetSpent}`,
+        value: formatAllocatedSpent(r.budgetByToken, r.spentByToken),
       })),
       {
         section: "Overview",
         label: "Total billed",
-        value: report.overview.totalBilled,
+        value: overview.billed,
       },
     ];
     if (report.notes) rows.push({ section: "Notes", label: "Notes", value: report.notes });
@@ -58,31 +66,45 @@ function ClientReportsPage() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
-        Download a CSV report scoped to your projects and billings.
+        Generate a tabular report scoped to your projects and billings.
       </p>
       <Card>
         <CardContent className="p-5 grid gap-4">
-          <Field label="notes (optional)" htmlFor="client-report-note">
-            <textarea
-              id="client-report-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            />
-          </Field>
+          <ReportNoteField id="client-report-note" value={note} onChange={setNote} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="start date (optional)" htmlFor="client-report-start">
+              <input
+                id="client-report-start"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={selectClass}
+              />
+            </Field>
+            <Field label="end date (optional)" htmlFor="client-report-end">
+              <input
+                id="client-report-end"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className={selectClass}
+              />
+            </Field>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
               {generateMutation.isPending ? "generating..." : "generate report"}
             </Button>
             {report && (
               <Button variant="outline" onClick={handleDownload}>
-                download csv
+                download summary csv
               </Button>
             )}
           </div>
         </CardContent>
       </Card>
+
+      {report && <ReportPreview report={report} showBuilders={false} />}
     </div>
   );
 }

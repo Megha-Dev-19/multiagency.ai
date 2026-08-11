@@ -19,16 +19,16 @@ function AdminClientsPage() {
     <div className="space-y-6">
       <header className="space-y-2">
         <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          admin · clients
+          people · clients
         </div>
         <h1 className="font-display text-3xl sm:text-4xl font-black uppercase leading-none tracking-tight">
           Clients
         </h1>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          Paying customers linked to projects and a read-only portal. Clients sign in with their
-          NEAR wallet — not email invites like{" "}
+          Paying customers — link them to projects and set their NEAR wallet for the read-only
+          client portal. Agency staff are managed under{" "}
           <Link to="/admin/members" className="underline underline-offset-2 hover:text-foreground">
-            Members
+            Team
           </Link>
           .
         </p>

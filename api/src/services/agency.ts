@@ -324,9 +324,10 @@ export function createAgencyService(db: Database, plugins: PluginsClient) {
         slug: string;
         title: string;
         description?: string;
-        repository: string;
+        repository?: string;
         nearnListingId?: string;
         kind?: "project" | "idea" | "scope" | "result";
+        parentSlug?: string;
         status?: string;
         visibility?: string;
       },
@@ -334,12 +335,47 @@ export function createAgencyService(db: Database, plugins: PluginsClient) {
       Effect.gen(function* () {
         const orgAccountId = yield* getDaoAccountId(context);
 
+        let content: string | undefined;
+        if (input.kind === "idea") {
+          content = input.description?.trim() || `# ${input.title.trim()}`;
+        } else if (input.kind === "scope" || input.kind === "result") {
+          const parentSlug = input.parentSlug?.trim();
+          if (!parentSlug) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", { message: "parentSlug is required for scope/result" }),
+            );
+          }
+          const orgProjects = yield* Effect.promise(() => fetchOrgProjects(orgAccountId, context));
+          const parent = orgProjects.find((p) => p.slug === parentSlug);
+          if (!parent) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", { message: "Parent project not found in this agency" }),
+            );
+          }
+          const parentKind = (parent as { kind?: string }).kind ?? "project";
+          if (input.kind === "scope" && parentKind !== "project") {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", { message: "Scope must mention a parent project" }),
+            );
+          }
+          if (input.kind === "result" && parentKind !== "scope") {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", { message: "Result must mention a parent scope" }),
+            );
+          }
+          const mention = `@${orgAccountId}/${parentSlug}`;
+          content = input.description?.trim()
+            ? `${mention}\n\n${input.description.trim()}`
+            : mention;
+        }
+
         const created = yield* Effect.promise(() =>
           plugins.projects(context).createProject({
             kind: input.kind ?? "project",
             title: input.title,
             slug: input.slug,
             description: input.description,
+            content,
             repository: input.repository,
             visibility: (input.visibility ?? "private") as "public" | "unlisted" | "private",
             organizationId: orgAccountId,

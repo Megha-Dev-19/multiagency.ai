@@ -5,6 +5,7 @@ import type { Database } from "../db";
 import { billings, budgets, clientProjects, clients } from "../db/schema";
 import type { PluginsClient } from "../lib/plugins-types.gen";
 import type { AgencyService } from "./agency";
+import { sumByToken } from "./report-tokens";
 import { enrichWithChainStatus } from "./sputnik";
 
 export function createReportsService(db: Database, agency: AgencyService, plugins: PluginsClient) {
@@ -12,10 +13,24 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
     generate: (
       context: Record<string, unknown>,
       orgAccountId: string,
-      input: { clientId?: string; note?: string },
+      input: { clientId?: string; projectId?: string; note?: string; startDate?: string; endDate?: string },
     ) =>
       Effect.gen(function* () {
         let projectIds: string[];
+
+        const startAt = input.startDate ? new Date(`${input.startDate}T00:00:00.000Z`) : null;
+        const endAt = input.endDate ? new Date(`${input.endDate}T23:59:59.999Z`) : null;
+        if (startAt && endAt && startAt > endAt) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "startDate must be on or before endDate" }),
+          );
+        }
+
+        const inPeriod = <T extends { createdAt: Date }>(row: T) => {
+          if (startAt && row.createdAt < startAt) return false;
+          if (endAt && row.createdAt > endAt) return false;
+          return true;
+        };
 
         if (input.clientId) {
           const clientRows = yield* Effect.promise(() =>
@@ -38,18 +53,34 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
           projectIds = projects.map((p) => p.id);
         }
 
+        if (input.projectId) {
+          if (!projectIds.includes(input.projectId)) {
+            return yield* Effect.fail(
+              new ORPCError("NOT_FOUND", {
+                message: input.clientId
+                  ? "Project not linked to this client"
+                  : "Project not found in this agency",
+              }),
+            );
+          }
+          projectIds = [input.projectId];
+        }
+
         const allProjects = yield* Effect.promise(() =>
           agency.fetchOrgProjects(orgAccountId, context),
         );
         const projectById = new Map(allProjects.map((p) => [p.id, p]));
 
-        const [budgetRows, billingRowsRaw, clientRows, clientLinkRows] = yield* Effect.promise(() =>
-          Promise.all([
-            projectIds.length > 0
-              ? db.select().from(budgets).where(inArray(budgets.projectId, projectIds))
-              : Promise.resolve([]),
-            projectIds.length > 0
-              ? db
+        const budgetRowsAll =
+          projectIds.length > 0
+            ? yield* Effect.promise(() =>
+                db.select().from(budgets).where(inArray(budgets.projectId, projectIds)),
+              )
+            : [];
+        const billingRowsRawAll =
+          projectIds.length > 0
+            ? yield* Effect.promise(() =>
+                db
                   .select()
                   .from(billings)
                   .where(
@@ -58,8 +89,15 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
                       input.clientId ? eq(billings.clientId, input.clientId) : undefined,
                     ),
                   )
-                  .orderBy(desc(billings.createdAt))
-              : Promise.resolve([]),
+                  .orderBy(desc(billings.createdAt)),
+              )
+            : [];
+
+        const budgetRows = budgetRowsAll.filter(inPeriod);
+        const billingRowsRaw = billingRowsRawAll.filter(inPeriod);
+
+        const [clientRows, clientLinkRows] = yield* Effect.promise(() =>
+          Promise.all([
             db.select().from(clients).orderBy(desc(clients.name)),
             projectIds.length > 0
               ? db
@@ -81,23 +119,26 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
           buildersResult.data.map((b) => [b.nearAccount, b.name ?? b.nearAccount]),
         );
 
-        const totalBudget = budgetRows.reduce((acc, b) => acc + BigInt(b.amount), 0n);
         const paidBillings = billingRows.filter((b) => b.status === "Approved");
-        const totalBilled = paidBillings.reduce((acc, b) => acc + BigInt(b.amount), 0n);
 
         const contributorStats = new Map<
           string,
-          { nearAccount: string; name: string; billed: bigint; count: number }
+          {
+            nearAccount: string;
+            name: string;
+            billedRows: Array<{ tokenId: string; amount: string }>;
+            count: number;
+          }
         >();
         for (const b of paidBillings) {
           if (!b.nearAccount) continue;
           const existing = contributorStats.get(b.nearAccount) ?? {
             nearAccount: b.nearAccount,
             name: builderByNear.get(b.nearAccount) ?? b.nearAccount,
-            billed: 0n,
+            billedRows: [] as Array<{ tokenId: string; amount: string }>,
             count: 0,
           };
-          existing.billed += BigInt(b.amount);
+          existing.billedRows.push({ tokenId: b.tokenId, amount: b.amount });
           existing.count += 1;
           contributorStats.set(b.nearAccount, existing);
         }
@@ -114,8 +155,8 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
           clientName: string;
           projectTitle: string;
           projectSlug: string;
-          budgetAllocated: string;
-          budgetSpent: string;
+          budgetByToken: ReturnType<typeof sumByToken>;
+          spentByToken: ReturnType<typeof sumByToken>;
         }> = [];
 
         const relevantClientIds = input.clientId
@@ -130,35 +171,38 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
           );
           for (const pid of pids) {
             const project = projectById.get(pid);
-            const allocated = budgetRows
-              .filter((b) => b.projectId === pid)
-              .reduce((acc, b) => acc + BigInt(b.amount), 0n);
-            const spent = paidBillings
-              .filter((b) => b.projectId === pid)
-              .reduce((acc, b) => acc + BigInt(b.amount), 0n);
+            const projectBudgets = budgetRows.filter((b) => b.projectId === pid);
+            const projectBillings = paidBillings.filter((b) => b.projectId === pid);
             clientBreakdown.push({
               clientName: client.name,
               projectTitle: project?.title ?? pid,
               projectSlug: project?.slug ?? pid,
-              budgetAllocated: allocated.toString(),
-              budgetSpent: spent.toString(),
+              budgetByToken: sumByToken(projectBudgets),
+              spentByToken: sumByToken(projectBillings),
             });
           }
         }
 
-        const period = new Date().toISOString().slice(0, 10);
+        const period =
+          input.startDate && input.endDate
+            ? `${input.startDate} – ${input.endDate}`
+            : input.startDate
+              ? `from ${input.startDate}`
+              : input.endDate
+                ? `through ${input.endDate}`
+                : "all time";
 
         return {
           overview: {
             projectCount: projectIds.length,
-            totalBudget: totalBudget.toString(),
-            totalBilled: totalBilled.toString(),
+            budgetByToken: sumByToken(budgetRows),
+            billedByToken: sumByToken(paidBillings),
             period,
           },
           contributorStats: [...contributorStats.values()].map((s) => ({
             nearAccount: s.nearAccount,
             name: s.name,
-            amountBilled: s.billed.toString(),
+            billedByToken: sumByToken(s.billedRows),
             billingCount: s.count,
           })),
           clientBreakdown,

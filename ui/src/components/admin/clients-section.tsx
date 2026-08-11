@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -21,7 +21,9 @@ import {
   adminClientsListQueryKey,
   adminClientsListQueryOptions,
   adminProjectsListQueryOptions,
+  invalidateWorkspaceQueries,
 } from "@/lib/queries";
+import { ensureAgencyWorkspaceActive, resolveAgencyOrgId } from "@/lib/workspace";
 
 type Client = Awaited<ReturnType<ApiClient["clients"]["list"]>>["data"][number];
 
@@ -217,6 +219,7 @@ function ClientCreateForm({ onDone }: { onDone: () => void }) {
   const apiClient = useApiClient();
   const authClient = useAuthClient();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const projectsQuery = useQuery(adminProjectsListQueryOptions(apiClient));
   const [name, setName] = useState("");
   const [nearAccountId, setNearAccountId] = useState("");
@@ -225,10 +228,12 @@ function ClientCreateForm({ onDone }: { onDone: () => void }) {
   const createMutation = useMutation({
     mutationFn: async () => {
       const trimmedName = name.trim();
+      const agencyToRestore = await resolveAgencyOrgId(authClient);
       const orgId = await ensureClientOrgId(authClient, trimmedName);
 
       const existing = (await apiClient.clients.list()).data.find((c) => c.orgId === orgId);
       if (existing) {
+        if (agencyToRestore) await ensureAgencyWorkspaceActive(authClient);
         return { client: existing, projectIds: selectedProjects, alreadyExists: true as const };
       }
 
@@ -238,9 +243,11 @@ function ClientCreateForm({ onDone }: { onDone: () => void }) {
         nearAccountId: nearAccountId.trim() || undefined,
         projectIds: selectedProjects.length > 0 ? selectedProjects : undefined,
       });
+      if (agencyToRestore) await ensureAgencyWorkspaceActive(authClient);
       return { ...result, alreadyExists: false as const };
     },
     onSuccess: async (result) => {
+      await invalidateWorkspaceQueries(queryClient, router);
       await queryClient.invalidateQueries({ queryKey: adminClientsListQueryKey });
       toast.success(
         result.alreadyExists
@@ -315,6 +322,8 @@ function ClientCreateForm({ onDone }: { onDone: () => void }) {
 export function ClientDetailSection({ clientId }: { clientId: string }) {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const navigate = useNavigate();
   const detailQuery = useQuery({
     queryKey: ["admin", "clients", "detail", clientId],
     queryFn: () => apiClient.clients.get({ id: clientId }),
@@ -348,6 +357,17 @@ export function ClientDetailSection({ clientId }: { clientId: string }) {
       toast.success("Client updated");
     },
     onError: (err: Error) => toast.error(err.message || "Failed to update client"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => apiClient.clients.delete({ id: clientId }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: adminClientsListQueryKey });
+      await router.invalidate();
+      toast.success("Client deleted");
+      void navigate({ to: "/admin/clients" });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to delete client"),
   });
 
   if (detailQuery.isLoading) {
@@ -400,13 +420,27 @@ export function ClientDetailSection({ clientId }: { clientId: string }) {
             />
           </Field>
         )}
-        <Button
-          onClick={() => updateMutation.mutate()}
-          disabled={!name.trim() || updateMutation.isPending}
-          size="sm"
-        >
-          {updateMutation.isPending ? "saving..." : "save changes"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => updateMutation.mutate()}
+            disabled={!name.trim() || updateMutation.isPending}
+            size="sm"
+          >
+            {updateMutation.isPending ? "saving..." : "save changes"}
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={deleteMutation.isPending}
+            onClick={() => {
+              if (window.confirm(`Delete client "${name}"? This cannot be undone.`)) {
+                deleteMutation.mutate();
+              }
+            }}
+          >
+            {deleteMutation.isPending ? "deleting..." : "delete client"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

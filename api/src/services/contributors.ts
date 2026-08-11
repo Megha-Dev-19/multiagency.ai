@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
@@ -82,12 +83,23 @@ export function createContributorsService(db: Database, plugins: PluginsClient) 
 
     get: (context: Record<string, unknown>, nearAccount: string) =>
       Effect.gen(function* () {
+        const assignmentRows = yield* Effect.promise(() =>
+          db
+            .select({ nearAccount: projectContributors.nearAccount })
+            .from(projectContributors)
+            .where(eq(projectContributors.nearAccount, nearAccount))
+            .limit(1),
+        );
+
         try {
           const result = yield* Effect.promise(() =>
             plugins.builders(context).getBuilder({ nearAccount }),
           );
           return { contributor: toProfile(result.data) };
         } catch {
+          if (assignmentRows.length === 0) {
+            return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Builder not found" }));
+          }
           return { contributor: stubProfile(nearAccount) };
         }
       }),

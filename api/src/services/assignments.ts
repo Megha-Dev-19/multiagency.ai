@@ -20,6 +20,7 @@ export function createAssignmentsService(db: Database) {
             projectId: r.projectId,
             nearAccount: r.nearAccount,
             role: r.role,
+            onboardingStatus: r.onboardingStatus,
             createdAt: r.createdAt,
           })),
         };
@@ -35,6 +36,7 @@ export function createAssignmentsService(db: Database) {
             projectId: r.projectId,
             nearAccount: r.nearAccount,
             role: r.role,
+            onboardingStatus: r.onboardingStatus,
             createdAt: r.createdAt,
           })),
         };
@@ -52,7 +54,12 @@ export function createAssignmentsService(db: Database) {
         return { data: rows };
       }),
 
-    create: (input: { projectId: string; nearAccount: string; role?: string }) =>
+    create: (input: {
+      projectId: string;
+      nearAccount: string;
+      role?: string;
+      onboardingStatus?: string;
+    }) =>
       Effect.gen(function* () {
         if (!input.nearAccount?.trim()) {
           return yield* Effect.fail(
@@ -67,11 +74,15 @@ export function createAssignmentsService(db: Database) {
               projectId: input.projectId,
               nearAccount: input.nearAccount.trim(),
               role: input.role ?? null,
+              onboardingStatus: input.onboardingStatus ?? "pending",
             })
             .onConflictDoUpdate({
               target: [projectContributors.projectId, projectContributors.nearAccount],
               set: {
                 role: input.role ?? null,
+                ...(input.onboardingStatus !== undefined
+                  ? { onboardingStatus: input.onboardingStatus }
+                  : {}),
               },
             }),
         );
@@ -80,6 +91,7 @@ export function createAssignmentsService(db: Database) {
           projectId: input.projectId,
           nearAccount: input.nearAccount.trim(),
           role: input.role ?? null,
+          onboardingStatus: input.onboardingStatus ?? "pending",
         };
       }),
 

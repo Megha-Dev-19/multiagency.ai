@@ -17,9 +17,11 @@ import { createApplicationsService } from "./services/applications";
 import { createAssignmentsService } from "./services/assignments";
 import { createBillingsService } from "./services/billings";
 import { createBudgetsService } from "./services/budgets";
+import { createClientPortalService, getNearAccountFromContext } from "./services/client-portal";
 import { createClientsService } from "./services/clients";
 import { createContributorsService } from "./services/contributors";
 import { createListingsService } from "./services/listings";
+import { createMeService } from "./services/me";
 import { createNearnService } from "./services/nearn";
 import { createProposalsService } from "./services/proposals";
 import { createReportsService } from "./services/reports";
@@ -90,11 +92,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const listings = createListingsService(db);
     const contributors = createContributorsService(db, plugins);
     const clients = createClientsService(db);
-    const reports = createReportsService(db, agency, plugins);
     const assignments = createAssignmentsService(db);
     const applications = createApplicationsService(db, notifyConfig, contributors);
     const budgets = createBudgetsService(db);
     const billings = createBillingsService(db, agency);
+    const reports = createReportsService(db, agency, plugins);
+    const clientPortal = createClientPortalService(clients, agency, billings, reports);
+    const me = createMeService(db, agency);
     const proposals = createProposalsService(db, agency);
     const tokens = createTokensService(db);
     const treasury = createTreasuryService(db, agency, listings);
@@ -281,24 +285,118 @@ export default createPlugin.withPlugins<PluginsClient>()({
         lookupByNearAccount: builder.clients.lookupByNearAccount
           .use(auth.requireAuth)
           .handler(async ({ input }) => {
-            const result = await runEffect(clients.lookupByNearAccount(input.nearAccountId));
-            return {
-              client: result?.client ?? null,
-              projectIds: result?.projectIds ?? [],
-            };
+            const memberships = await runEffect(clients.listByNearAccount(input.nearAccountId));
+            return { memberships };
           }),
 
         create: builder.clients.create
           .use(auth.requireOrgRole("admin", "owner"))
-          .handler(async ({ context, input }) => runEffect(clients.create(context, input))),
+          .handler(async ({ context, input }) => {
+            const agencyDaoAccountId = getDaoAccountIdOrThrow(context);
+            return runEffect(
+              clients.create(context, {
+                ...input,
+                agencyDaoAccountId,
+              }),
+            );
+          }),
 
         update: builder.clients.update
           .use(auth.requireOrgRole("admin", "owner"))
-          .handler(async ({ input }) => runEffect(clients.update(input))),
+          .handler(async ({ context, input }) => {
+            const agencyDaoAccountId = getDaoAccountIdOrThrow(context);
+            return runEffect(
+              clients.update({
+                ...input,
+                agencyDaoAccountId,
+              }),
+            );
+          }),
 
         delete: builder.clients.delete
           .use(auth.requireOrgRole("admin", "owner"))
           .handler(async ({ input }) => runEffect(clients.delete(input.id))),
+      },
+
+      clientPortal: {
+        dashboard: {
+          summary: builder.clientPortal.dashboard.summary
+            .use(auth.requireAuth)
+            .handler(async ({ context, input }) => {
+              const nearAccountId = getNearAccountFromContext(context);
+              return runEffect(
+                clientPortal.dashboardSummary(nearAccountId, input.agencyDaoAccountId, context),
+              );
+            }),
+        },
+
+        projects: {
+          list: builder.clientPortal.projects.list
+            .use(auth.requireAuth)
+            .handler(async ({ context, input }) => {
+              const nearAccountId = getNearAccountFromContext(context);
+              return runEffect(
+                clientPortal.listProjects(nearAccountId, input.agencyDaoAccountId, context),
+              );
+            }),
+
+          get: builder.clientPortal.projects.get
+            .use(auth.requireAuth)
+            .handler(async ({ context, input }) => {
+              const nearAccountId = getNearAccountFromContext(context);
+              return runEffect(
+                clientPortal.getProject(
+                  nearAccountId,
+                  input.agencyDaoAccountId,
+                  input.slug,
+                  context,
+                ),
+              );
+            }),
+
+          getBudget: builder.clientPortal.projects.getBudget
+            .use(auth.requireAuth)
+            .handler(async ({ context, input }) => {
+              const nearAccountId = getNearAccountFromContext(context);
+              return runEffect(
+                clientPortal.getBudget(
+                  nearAccountId,
+                  input.agencyDaoAccountId,
+                  input.projectId,
+                  context,
+                ),
+              );
+            }),
+        },
+
+        billings: {
+          list: builder.clientPortal.billings.list
+            .use(auth.requireAuth)
+            .handler(async ({ context, input }) => {
+              const nearAccountId = getNearAccountFromContext(context);
+              const { agencyDaoAccountId, ...rest } = input;
+              return runEffect(
+                clientPortal.listBillings(nearAccountId, agencyDaoAccountId, rest, context),
+              );
+            }),
+        },
+
+        reports: {
+          generate: builder.clientPortal.reports.generate
+            .use(auth.requireAuth)
+            .handler(async ({ context, input }) => {
+              const nearAccountId = getNearAccountFromContext(context);
+              const { agencyDaoAccountId, note, startDate, endDate } = input;
+              return runEffect(
+                clientPortal.generateReport(
+                  nearAccountId,
+                  agencyDaoAccountId,
+                  { note, startDate, endDate },
+                  context,
+                ),
+              );
+            }),
+        },
       },
 
       contributors: {
@@ -352,6 +450,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                     projectTitle: project.title,
                     nearAccount: row.nearAccount,
                     role: row.role,
+                    onboardingStatus: row.onboardingStatus,
                     createdAt: row.createdAt,
                   };
                 })
@@ -384,11 +483,24 @@ export default createPlugin.withPlugins<PluginsClient>()({
               await runEffect(
                 Effect.promise(() => agency.requireProjectInOrg(input.projectId!, orgId, context)),
               );
+
+            let projectIds: string[] | null = input.projectId ? [input.projectId] : null;
+            if (input.clientId) {
+              const clientProjectIds = await runEffect(
+                clients.getProjectIdsForClient(input.clientId),
+              );
+              projectIds =
+                projectIds === null
+                  ? clientProjectIds
+                  : projectIds.filter((id) => clientProjectIds.includes(id));
+            }
+
             return runEffect(
               Effect.promise(() =>
                 budgets.list({
-                  projectIds: input.projectId ? [input.projectId] : null,
+                  projectIds,
                   tokenId: input.tokenId,
+                  clientId: input.clientId,
                   cursor: input.cursor,
                   limit: input.limit,
                 }),
@@ -410,6 +522,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 amount: input.amount,
                 note: input.note ?? null,
                 actorAccountId: actorId,
+                clientId: input.clientId ?? null,
               }) as any,
             );
             return { budget } as any;
@@ -429,6 +542,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 amount: input.amount,
                 note: input.note ?? null,
                 actorAccountId: actorId,
+                clientId: input.clientId ?? null,
               }) as any,
             );
             return { budget } as any;
@@ -539,6 +653,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
             | undefined;
           return { orgRole: role ?? null };
         }),
+
+        assignedProjects: builder.me.assignedProjects
+          .use(auth.requireOrgRole("admin", "owner", "member"))
+          .handler(async ({ context }) => {
+            const orgId = getDaoAccountIdOrThrow(context);
+            const nearAccount = context.near?.primaryAccountId as string | undefined;
+            if (!nearAccount) {
+              throw new ORPCError("FORBIDDEN", {
+                message: "Link a NEAR wallet to view assigned projects",
+              });
+            }
+            return runEffect(me.assignedProjects(context, orgId, nearAccount));
+          }),
       },
 
       team: {

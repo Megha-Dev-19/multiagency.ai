@@ -1,21 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Badge, Budget } from "@/components";
-import { AssignmentsSection } from "@/components/admin/assignments-section";
+import { createFileRoute, getRouteApi, Link, notFound } from "@tanstack/react-router";
+import { Badge } from "@/components";
 import { BillingsAdminSection } from "@/components/admin/billings-section";
 import { ProjectBudgetPanel } from "@/components/admin/project-budget-panel";
 import { useApiClient } from "@/lib/api";
-import { adminProjectBudgetQueryOptions, adminProjectDetailQueryOptions } from "@/lib/queries";
+import { clientPortalProjectDetailQueryOptions } from "@/lib/queries";
+
+const clientPortalRoute = getRouteApi("/_layout/_authenticated/client");
 
 export const Route = createFileRoute("/_layout/_authenticated/client/projects/$slug")({
-  loader: async ({ context, params }) => {
+  loader: async ({ context, params, location }) => {
+    const agencyDaoAccountId = new URLSearchParams(location.search).get("agency");
+    if (!agencyDaoAccountId) return null;
     const data = await context.queryClient
-      .ensureQueryData(adminProjectDetailQueryOptions(context.apiClient, params.slug))
+      .ensureQueryData(
+        clientPortalProjectDetailQueryOptions(context.apiClient, agencyDaoAccountId, params.slug),
+      )
       .catch(() => null);
     if (!data) return null;
-    await context.queryClient.ensureQueryData(
-      adminProjectBudgetQueryOptions(context.apiClient, data.project.id),
-    );
     return data;
   },
   component: ClientProjectDetailPage,
@@ -23,30 +25,30 @@ export const Route = createFileRoute("/_layout/_authenticated/client/projects/$s
 
 function ClientProjectDetailPage() {
   const { slug } = Route.useParams();
-  const { projectIds, client } = Route.useRouteContext();
+  const { client, agencyDaoAccountId } = clientPortalRoute.useRouteContext();
   const apiClient = useApiClient();
+  const search = { agency: agencyDaoAccountId };
 
-  const projectQuery = useQuery(adminProjectDetailQueryOptions(apiClient, slug));
+  const projectQuery = useQuery(
+    clientPortalProjectDetailQueryOptions(apiClient, agencyDaoAccountId, slug),
+  );
   const projectId = projectQuery.data?.project.id;
-  const budgetQuery = useQuery({
-    ...adminProjectBudgetQueryOptions(apiClient, projectId ?? ""),
-    enabled: !!projectId,
-  });
 
   if (projectQuery.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading project…</p>;
   }
-  if (!projectQuery.data || !projectIds.includes(projectQuery.data.project.id)) {
+  if (projectQuery.isError || !projectQuery.data) {
     throw notFound();
   }
 
-  const { project } = projectQuery.data;
+  const { project, contributors } = projectQuery.data;
 
   return (
     <div className="space-y-6">
       <div>
         <Link
           to="/client/projects"
+          search={search}
           className="text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground"
         >
           ← your projects
@@ -69,26 +71,38 @@ function ClientProjectDetailPage() {
         </section>
       )}
 
-      <section className="space-y-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted-foreground">Contributors</h2>
-        {projectId && <AssignmentsSection projectId={projectId} readOnly />}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted-foreground">Budget</h2>
-        {budgetQuery.data && budgetQuery.data.budgets.length > 0 ? (
-          <div className="space-y-4">
-            {budgetQuery.data.budgets.map((b) => (
-              <Budget key={b.tokenId} budget={b} />
+      {contributors && contributors.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs uppercase tracking-wide text-muted-foreground">Builders</h2>
+          <ul className="space-y-1 text-sm">
+            {contributors.map((c) => (
+              <li key={c.nearAccount}>
+                {c.name}
+                {c.role ? <span className="text-muted-foreground"> · {c.role}</span> : null}
+              </li>
             ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No budget allocated.</p>
-        )}
-        {projectId && <ProjectBudgetPanel projectId={projectId} readOnly />}
-      </section>
+          </ul>
+        </section>
+      )}
 
-      {projectId && <BillingsAdminSection readOnly clientId={client.id} />}
+      {projectId && (
+        <ProjectBudgetPanel
+          projectId={projectId}
+          readOnly
+          clientPortal
+          agencyDaoAccountId={agencyDaoAccountId}
+        />
+      )}
+
+      {projectId && (
+        <BillingsAdminSection
+          readOnly
+          clientPortal
+          clientId={client.id}
+          agencyDaoAccountId={agencyDaoAccountId}
+          fixedProjectId={projectId}
+        />
+      )}
     </div>
   );
 }

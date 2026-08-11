@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
@@ -11,7 +11,26 @@ export function createClientsService(db: Database) {
         const rows = yield* Effect.promise(() =>
           db.select().from(clients).orderBy(desc(clients.updatedAt)),
         );
-        return { data: rows };
+        if (rows.length === 0)
+          return { data: [] as Array<(typeof rows)[number] & { projectIds: string[] }> };
+
+        const clientIds = rows.map((r) => r.id);
+        const projectRows = yield* Effect.promise(() =>
+          db.select().from(clientProjects).where(inArray(clientProjects.clientId, clientIds)),
+        );
+        const projectsByClient = new Map<string, string[]>();
+        for (const row of projectRows) {
+          const list = projectsByClient.get(row.clientId) ?? [];
+          list.push(row.projectId);
+          projectsByClient.set(row.clientId, list);
+        }
+
+        return {
+          data: rows.map((row) => ({
+            ...row,
+            projectIds: projectsByClient.get(row.id) ?? [],
+          })),
+        };
       }),
 
     get: (id: string) =>
@@ -29,10 +48,47 @@ export function createClientsService(db: Database) {
         return { client: row, projectIds: projectRows.map((p) => p.projectId) };
       }),
 
-    lookupByNearAccount: (nearAccountId: string) =>
+    listByNearAccount: (nearAccountId: string) =>
       Effect.gen(function* () {
         const rows = yield* Effect.promise(() =>
-          db.select().from(clients).where(eq(clients.nearAccountId, nearAccountId)).limit(1),
+          db
+            .select()
+            .from(clients)
+            .where(eq(clients.nearAccountId, nearAccountId))
+            .orderBy(desc(clients.updatedAt)),
+        );
+        if (rows.length === 0) return [];
+
+        const clientIds = rows.map((r) => r.id);
+        const projectRows = yield* Effect.promise(() =>
+          db.select().from(clientProjects).where(inArray(clientProjects.clientId, clientIds)),
+        );
+        const projectsByClient = new Map<string, string[]>();
+        for (const row of projectRows) {
+          const list = projectsByClient.get(row.clientId) ?? [];
+          list.push(row.projectId);
+          projectsByClient.set(row.clientId, list);
+        }
+
+        return rows.map((client) => ({
+          client,
+          projectIds: projectsByClient.get(client.id) ?? [],
+        }));
+      }),
+
+    getByNearAndAgency: (nearAccountId: string, agencyDaoAccountId: string) =>
+      Effect.gen(function* () {
+        const rows = yield* Effect.promise(() =>
+          db
+            .select()
+            .from(clients)
+            .where(
+              and(
+                eq(clients.nearAccountId, nearAccountId),
+                eq(clients.agencyDaoAccountId, agencyDaoAccountId),
+              ),
+            )
+            .limit(1),
         );
         const row = rows[0];
         if (!row) return null;
@@ -44,9 +100,38 @@ export function createClientsService(db: Database) {
 
     create: (
       _context: Record<string, unknown>,
-      input: { orgId: string; name: string; nearAccountId?: string; projectIds?: string[] },
+      input: {
+        orgId: string;
+        agencyDaoAccountId?: string;
+        name: string;
+        nearAccountId?: string;
+        projectIds?: string[];
+      },
     ) =>
       Effect.gen(function* () {
+        const near = input.nearAccountId?.trim() || null;
+        if (near && input.agencyDaoAccountId) {
+          const dup = yield* Effect.promise(() =>
+            db
+              .select({ id: clients.id })
+              .from(clients)
+              .where(
+                and(
+                  eq(clients.nearAccountId, near),
+                  eq(clients.agencyDaoAccountId, input.agencyDaoAccountId!),
+                ),
+              )
+              .limit(1),
+          );
+          if (dup[0]) {
+            return yield* Effect.fail(
+              new ORPCError("BAD_REQUEST", {
+                message: "This NEAR account is already a client of this agency.",
+              }),
+            );
+          }
+        }
+
         const id = crypto.randomUUID();
         const now = new Date();
 
@@ -56,6 +141,7 @@ export function createClientsService(db: Database) {
             .values({
               id,
               orgId: input.orgId,
+              agencyDaoAccountId: input.agencyDaoAccountId ?? null,
               name: input.name.trim(),
               nearAccountId: input.nearAccountId?.trim() || null,
               createdAt: now,
@@ -88,6 +174,7 @@ export function createClientsService(db: Database) {
       id: string;
       name?: string;
       nearAccountId?: string | null;
+      agencyDaoAccountId?: string | null;
       projectIds?: string[];
     }) =>
       Effect.gen(function* () {
@@ -101,6 +188,9 @@ export function createClientsService(db: Database) {
         const updates: Record<string, unknown> = { updatedAt: new Date() };
         if (input.name !== undefined) updates.name = input.name.trim();
         if (input.nearAccountId !== undefined) updates.nearAccountId = input.nearAccountId;
+        if (input.agencyDaoAccountId !== undefined) {
+          updates.agencyDaoAccountId = input.agencyDaoAccountId;
+        }
 
         const [row] = yield* Effect.promise(() =>
           db.update(clients).set(updates).where(eq(clients.id, input.id)).returning(),

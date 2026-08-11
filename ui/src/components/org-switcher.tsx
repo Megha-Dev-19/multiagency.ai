@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { Building2, Check } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import type { AuthClient } from "@/lib/auth";
 import { organizationsListQueryKey, sessionQueryOptions } from "@/lib/auth";
 import { isAgencyWorkspace } from "@/lib/org-metadata";
 import { invalidateWorkspaceQueries } from "@/lib/queries";
+import { switchAgencyWorkspace } from "@/lib/workspace";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -17,27 +18,11 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
-async function activeOrganizationId(auth: AuthClient): Promise<string | null> {
-  const { data: session } = await auth.getSession({ query: { disableCookieCache: true } });
-  return session?.session?.activeOrganizationId ?? null;
-}
-
-async function switchAgency(auth: AuthClient, organizationId: string): Promise<void> {
-  const { error } = await auth.organization.setActive({ organizationId });
-  if (error) throw new Error(error.message || "Failed to switch agency");
-
-  if ((await activeOrganizationId(auth)) === organizationId) return;
-
-  await auth.organization.setActive({ organizationId });
-  if ((await activeOrganizationId(auth)) !== organizationId) {
-    throw new Error("Failed to switch agency");
-  }
-}
-
 export function OrgSwitcher() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const recoveredRef = useRef(false);
 
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const activeOrgId = session?.session?.activeOrganizationId ?? null;
@@ -51,12 +36,19 @@ export function OrgSwitcher() {
   });
 
   const switchMutation = useMutation({
-    mutationFn: (orgId: string) => switchAgency(auth, orgId),
-    onSuccess: async () => {
+    mutationFn: (orgId: string) => switchAgencyWorkspace(auth, orgId),
+    onSuccess: async (ok) => {
+      if (!ok) {
+        toast.error("Could not switch agency — try signing out and back in.");
+        return;
+      }
       await queryClient.fetchQuery(
         sessionQueryOptions(auth, undefined, { disableCookieCache: true }),
       );
       await invalidateWorkspaceQueries(queryClient, router);
+    },
+    onError: () => {
+      toast.error("Could not switch agency — try signing out and back in.");
     },
   });
 
@@ -65,6 +57,14 @@ export function OrgSwitcher() {
     [orgsQuery.data],
   );
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (recoveredRef.current || orgsQuery.isLoading || switchMutation.isPending) return;
+    if (organizations.length === 0 || activeOrg) return;
+    recoveredRef.current = true;
+    switchMutation.mutate(organizations[0]!.id);
+  }, [activeOrg, organizations, orgsQuery.isLoading, switchMutation]);
 
   return (
     <DropdownMenu>

@@ -1,9 +1,11 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Badge, Card, CardContent, DataTable } from "@/components";
+import { Badge, DataTable } from "@/components";
+import { BuilderSummaryPanel } from "@/components/admin/builder-summary-panel";
 import { ContributorProfileForm } from "@/components/admin/contributors-section";
 import { AdminSectionError, AdminSectionSkeleton } from "@/components/admin-section-states";
+import { BuilderAvatar } from "@/components/builder-avatar";
 import { formatTokenAmount } from "@/lib/format-amount";
 import {
   adminAssignmentsListQueryOptions,
@@ -13,14 +15,29 @@ import {
 
 export const Route = createFileRoute("/_layout/_authenticated/admin/contributors/$nearAccount")({
   head: ({ params }) => ({
-    meta: [{ title: `${params.nearAccount} | Admin · Contributors` }],
+    meta: [{ title: `${params.nearAccount} | Admin · Builders` }],
   }),
   loader: ({ context, params }) =>
     context.queryClient.ensureQueryData(
       adminContributorDetailQueryOptions(context.apiClient, params.nearAccount),
     ),
   pendingComponent: () => <AdminSectionSkeleton rows={6} />,
-  errorComponent: ({ error, reset }) => <AdminSectionError error={error} onRetry={reset} />,
+  errorComponent: ({ error, reset }) => {
+    if (error.message?.toLowerCase().includes("not found")) {
+      return (
+        <div className="space-y-3 py-8">
+          <h1 className="font-display text-2xl font-black uppercase">Builder not found</h1>
+          <p className="text-sm text-muted-foreground">
+            No builder or assignment exists for this NEAR account.
+          </p>
+          <Link to="/admin/contributors" className="text-sm underline">
+            ← all builders
+          </Link>
+        </div>
+      );
+    }
+    return <AdminSectionError error={error} onRetry={reset} />;
+  },
   component: ContributorDetailPage,
 });
 
@@ -47,10 +64,6 @@ function ContributorDetailPage() {
     (a) => a.nearAccount === nearAccount,
   );
   const billings = billingsQuery.data?.pages.flatMap((p) => p.data) ?? [];
-
-  const totalBilled = billings
-    .filter((b) => b.status === "Approved")
-    .reduce((acc, b) => acc + BigInt(b.amount), 0n);
 
   const projectColumns: ColumnDef<(typeof assignments)[number]>[] = [
     {
@@ -81,6 +94,9 @@ function ContributorDetailPage() {
       id: "amount",
       header: "Amount",
       accessorKey: "amount",
+      meta: {
+        exportValue: (row: (typeof billings)[number]) => formatTokenAmount(row.amount, row.tokenId),
+      },
       cell: ({ row }) => (
         <span className="font-mono text-sm">
           {formatTokenAmount(row.original.amount, row.original.tokenId)}
@@ -102,46 +118,29 @@ function ContributorDetailPage() {
           to="/admin/contributors"
           className="text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground"
         >
-          ← all contributors
+          ← all builders
         </Link>
       </div>
 
-      <header className="space-y-2">
-        <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          admin · contributors
+      <header className="flex flex-wrap items-start gap-4">
+        <BuilderAvatar name={contributor.name} nearAccount={nearAccount} />
+        <div className="space-y-2 min-w-0">
+          <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+            people · builders
+          </div>
+          <h1 className="font-display text-3xl sm:text-4xl font-black uppercase leading-none tracking-tight">
+            {contributor.name ?? nearAccount}
+          </h1>
+          <p className="font-mono text-sm text-muted-foreground">{nearAccount}</p>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Builder profile, project assignments, and billing history.
+          </p>
         </div>
-        <h1 className="font-display text-3xl sm:text-4xl font-black uppercase leading-none tracking-tight">
-          {contributor.name ?? nearAccount}
-        </h1>
-        <p className="font-mono text-sm text-muted-foreground">{nearAccount}</p>
-        <p className="text-sm text-muted-foreground max-w-2xl">
-          Builder profile for project assignments and billing. Edit name, bio, skills, and links
-          below. This is separate from{" "}
-          <Link to="/admin/members" className="underline underline-offset-2 hover:text-foreground">
-            Members
-          </Link>
-          — contributors do not get admin access unless you invite them there too.
-        </p>
       </header>
 
       <ContributorProfileForm nearAccount={nearAccount} contributor={contributor} />
 
-      <Card>
-        <CardContent className="p-5 grid gap-2 sm:grid-cols-3">
-          <div>
-            <div className="text-xs uppercase text-muted-foreground">Total billed (approved)</div>
-            <div className="font-mono text-lg">{totalBilled.toString()}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase text-muted-foreground">Billing entries</div>
-            <div className="font-mono text-lg">{billings.length}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase text-muted-foreground">Projects</div>
-            <div className="font-mono text-lg">{assignments.length}</div>
-          </div>
-        </CardContent>
-      </Card>
+      <BuilderSummaryPanel billings={billings} projectCount={assignments.length} />
 
       <section className="space-y-3">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
@@ -165,7 +164,7 @@ function ContributorDetailPage() {
           columns={billingColumns}
           data={billings}
           isLoading={billingsQuery.isLoading}
-          emptyMessage="No billings for this contributor."
+          emptyMessage="No billings for this builder."
           csvFilename={`contributor-${nearAccount}-billings`}
           viewId={`contributor-${nearAccount}-billings`}
         />

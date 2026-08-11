@@ -108,6 +108,7 @@ export const clients = agency.table(
   {
     id: text("id").primaryKey(),
     orgId: text("org_id").notNull(),
+    agencyDaoAccountId: text("agency_dao_account_id"),
     name: text("name").notNull(),
     nearAccountId: text("near_account_id"),
     createdAt: timestamp("created_at", { withTimezone: false }).notNull().default(sql`now()`),
@@ -115,9 +116,9 @@ export const clients = agency.table(
   },
   (t) => ({
     orgIdx: index("clients_org_id").on(t.orgId),
-    nearAccountIdx: uniqueIndex("clients_near_account_id")
-      .on(t.nearAccountId)
-      .where(sql`${t.nearAccountId} IS NOT NULL`),
+    agencyNearIdx: uniqueIndex("clients_agency_near_unique")
+      .on(t.agencyDaoAccountId, t.nearAccountId)
+      .where(sql`${t.nearAccountId} IS NOT NULL AND ${t.agencyDaoAccountId} IS NOT NULL`),
   }),
 );
 
@@ -145,6 +146,7 @@ export const projectContributors = agency.table(
     projectId: text("project_id").notNull(),
     nearAccount: text("near_account").notNull(),
     role: text("role"),
+    onboardingStatus: text("onboarding_status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: false }).notNull().default(sql`now()`),
   },
   (t) => ({
@@ -163,11 +165,13 @@ export const budgets = agency.table(
     note: text("note"),
     actorAccountId: text("actor_account_id").notNull(),
     relatedBudgetId: text("related_budget_id"),
+    clientId: text("client_id").references(() => clients.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: false }).notNull().default(sql`now()`),
   },
   (t) => ({
     cursor: index("budgets_cursor").on(t.createdAt, t.id),
     projectIdx: index("budgets_project_id").on(t.projectId),
+    clientIdx: index("budgets_client_id").on(t.clientId),
   }),
 );
 

@@ -30,6 +30,7 @@ ADD CONSTRAINT "applications_status_check" CHECK (
 CREATE TABLE IF NOT EXISTS "agency"."clients" (
     "id" text PRIMARY KEY NOT NULL,
     "org_id" text NOT NULL,
+    "agency_dao_account_id" text,
     "name" text NOT NULL,
     "near_account_id" text,
     "created_at" timestamp DEFAULT now() NOT NULL,
@@ -38,9 +39,13 @@ CREATE TABLE IF NOT EXISTS "agency"."clients" (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "clients_org_id" ON "agency"."clients" ("org_id");
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "clients_near_account_id" ON "agency"."clients" ("near_account_id")
+CREATE UNIQUE INDEX IF NOT EXISTS "clients_agency_near_unique" ON "agency"."clients" (
+    "agency_dao_account_id",
+    "near_account_id"
+)
 WHERE
-    "near_account_id" IS NOT NULL;
+    "near_account_id" IS NOT NULL
+    AND "agency_dao_account_id" IS NOT NULL;
 
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "agency"."client_projects" (
@@ -93,6 +98,10 @@ ADD PRIMARY KEY ("project_id", "near_account");
 CREATE INDEX IF NOT EXISTS "project_contributors_near_account" ON "agency"."project_contributors" ("near_account");
 
 --> statement-breakpoint
+ALTER TABLE "agency"."project_contributors"
+ADD COLUMN IF NOT EXISTS "onboarding_status" text NOT NULL DEFAULT 'pending';
+
+--> statement-breakpoint
 ALTER TABLE "agency"."billings"
 ADD COLUMN IF NOT EXISTS "near_account" text;
 --> statement-breakpoint
@@ -114,6 +123,12 @@ DROP COLUMN IF EXISTS "contributor_id";
 CREATE INDEX IF NOT EXISTS "billings_near_account" ON "agency"."billings" ("near_account");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "billings_client_id" ON "agency"."billings" ("client_id");
+
+--> statement-breakpoint
+ALTER TABLE "agency"."budgets"
+ADD COLUMN IF NOT EXISTS "client_id" text REFERENCES "agency"."clients" ("id") ON DELETE SET NULL;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "budgets_client_id" ON "agency"."budgets" ("client_id");
 
 --> statement-breakpoint
 DROP TABLE IF EXISTS "agency"."contributors";
