@@ -3,14 +3,12 @@ import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
-import { createDatabaseDriver } from "./db";
-import { loadMigrations } from "./db/load-migrations";
-import { migrate } from "./db/migrator";
+import { DatabaseLive, DatabaseTag } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema, runEffect } from "./lib/context";
 import { flagsToLifecycle, lifecycleToFlags } from "./lib/listing-lifecycle";
 import { getNetwork, pinnedNetwork } from "./lib/network";
-import { getDaoAccountIdOrThrow } from "./lib/org";
+import { getDaoAccountIdOrThrow, setDefaultDaoAccountId } from "./lib/org";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { createAgencyService } from "./services/agency";
 import { createApplicationsService } from "./services/applications";
@@ -36,7 +34,9 @@ import { createTokensService } from "./services/tokens";
 import { createTreasuryService } from "./services/treasury";
 
 export default createPlugin.withPlugins<PluginsClient>()({
-  variables: z.object({}),
+  variables: z.object({
+    agencyDaoAccount: z.string().optional(),
+  }),
 
   secrets: z.object({
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
@@ -49,30 +49,80 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, plugins) =>
-    Effect.promise(async () => {
-      const driver = await createDatabaseDriver(config.secrets.API_DATABASE_URL);
-      const db = driver.db;
-      const migrations = await loadMigrations();
-      await migrate(db, migrations);
-      console.log("[API] Services Initialized");
+  initialize: (config, plugins, tools) =>
+    Effect.gen(function* () {
+      setDefaultDaoAccountId(config.variables.agencyDaoAccount);
+
+      const db = yield* tools.buildService(
+        DatabaseTag,
+        DatabaseLive(config.secrets.API_DATABASE_URL),
+      );
 
       const notifyConfig = {
         webhookUrl: config.secrets.APPLICATIONS_WEBHOOK_URL,
         resendApiKey: config.secrets.RESEND_API_KEY,
         fromEmail: config.secrets.NOTIFY_FROM_EMAIL,
       };
-      return { db, driver, plugins, notifyConfig };
+
+      const agency = createAgencyService(db, plugins);
+      const listings = createListingsService(db);
+      const contributors = createContributorsService(db, plugins);
+      const applications = createApplicationsService(db, notifyConfig, contributors);
+      const clients = createClientsService(db);
+      const assignments = createAssignmentsService(db);
+      const budgets = createBudgetsService(db);
+      const billings = createBillingsService(db, agency);
+      const reports = createReportsService(db, agency, plugins);
+      const clientPortal = createClientPortalService(clients, agency, billings, reports);
+      const me = createMeService(db, agency);
+      const proposals = createProposalsService(db, agency);
+      const tokens = createTokensService(db);
+      const treasury = createTreasuryService(db, agency, listings);
+      const nearn = createNearnService();
+
+      yield* Effect.logInfo(`[API] plugins.projects available: ${typeof plugins?.projects}`);
+      yield* Effect.logInfo("[API] Services Initialized");
+      return {
+        db,
+        applications,
+        agency,
+        listings,
+        contributors,
+        clients,
+        assignments,
+        budgets,
+        billings,
+        reports,
+        clientPortal,
+        me,
+        proposals,
+        tokens,
+        treasury,
+        nearn,
+      };
     }),
 
-  shutdown: (services) =>
-    Effect.promise(async () => {
-      console.log("[API] Shutdown");
-      await services.driver.close();
-    }),
+  shutdown: () => Effect.logInfo("[API] Shutdown"),
 
   createRouter: (services, builder) => {
-    const { db, notifyConfig, plugins } = services;
+    const { db } = services;
+    const {
+      applications,
+      agency,
+      listings,
+      contributors,
+      clients,
+      assignments,
+      budgets,
+      billings,
+      reports,
+      clientPortal,
+      me,
+      proposals,
+      tokens,
+      treasury,
+      nearn,
+    } = services;
     const auth = createAuthMiddleware(builder);
 
     const withLifecycle = <
@@ -87,22 +137,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
       ...listing,
       lifecycle: flagsToLifecycle(listing),
     });
-
-    const agency = createAgencyService(db, plugins);
-    const listings = createListingsService(db);
-    const contributors = createContributorsService(db, plugins);
-    const clients = createClientsService(db);
-    const assignments = createAssignmentsService(db);
-    const applications = createApplicationsService(db, notifyConfig, contributors);
-    const budgets = createBudgetsService(db);
-    const billings = createBillingsService(db, agency);
-    const reports = createReportsService(db, agency, plugins);
-    const clientPortal = createClientPortalService(clients, agency, billings, reports);
-    const me = createMeService(db, agency);
-    const proposals = createProposalsService(db, agency);
-    const tokens = createTokensService(db);
-    const treasury = createTreasuryService(db, agency, listings);
-    const nearn = createNearnService();
 
     return {
       ping: builder.ping.handler(async () => ({
@@ -134,9 +168,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       agency: {
         projects: {
-          list: builder.agency.projects.list
-            .use(auth.requireOrganization)
-            .handler(async ({ context }) => runEffect(agency.listProjects(context))),
+          list: builder.agency.projects.list.handler(async ({ context }) =>
+            runEffect(agency.listProjects(context)),
+          ),
 
           get: builder.agency.projects.get
             .use(auth.requireOrganization)
@@ -435,14 +469,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
           .use(auth.requireOrgRole("admin", "owner", "member"))
           .handler(async ({ context }) => {
             const orgAccountId = getDaoAccountIdOrThrow(context);
-            const [rows, byId] = await Promise.all([
+            const [rows, orgProjects] = await Promise.all([
               runEffect(assignments.listAll()),
-              agency.fetchOrgProjectsById(orgAccountId, context),
+              agency.fetchOrgProjects(orgAccountId, context),
             ]);
             return {
               data: rows.data
                 .map((row) => {
-                  const project = byId.get(row.projectId);
+                  const project = orgProjects.find((p) => p.id === row.projectId);
                   if (!project) return null;
                   return {
                     projectId: row.projectId,

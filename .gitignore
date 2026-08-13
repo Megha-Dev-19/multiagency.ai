@@ -122,6 +122,7 @@ build/Release
 node_modules/
 jspm_packages/
 host/test-results/
+test-results/
 api/types/
 
 # Snowpack dependency directory (https://snowpack.dev/)
@@ -303,6 +304,7 @@ fabric.properties
 .turbo
 .bos
 !.bos/sync-snapshot.json
+!.bos/infra-state.json
 
 # AI tool config (local only, not committed)
 .opencode/
@@ -331,7 +333,6 @@ node_modules/.federation
 # Already-tracked .md files (README, docs) stay tracked; changesets are kept.
 *.md
 !**/skills/**/*.md
-!ui/public/docs/**/*.md
 !AGENTS.md
 !CONTRIBUTING.md
 !**/README.md

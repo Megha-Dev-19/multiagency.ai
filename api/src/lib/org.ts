@@ -22,6 +22,15 @@ export function parseOrgMetadata(raw: unknown): OrgMetadata {
   return {};
 }
 
+// Deployment-level default, set once at plugin initialize from
+// bos.config.json (app.api.variables.agencyDaoAccount). Used for
+// anonymous requests, which have no organization context.
+let defaultDaoAccountId: string | undefined;
+
+export function setDefaultDaoAccountId(id: string | undefined): void {
+  defaultDaoAccountId = id;
+}
+
 function extractDaoAccountId(context: {
   organization?: {
     organization?: {
@@ -32,6 +41,7 @@ function extractDaoAccountId(context: {
   const metadata = parseOrgMetadata(context.organization?.organization?.metadata);
   const daoAccountId = metadata.daoAccountId;
   if (typeof daoAccountId === "string" && daoAccountId.length > 0) return daoAccountId;
+  if (defaultDaoAccountId) return defaultDaoAccountId;
   throw new ORPCError("FORBIDDEN", {
     message:
       metadata.isPersonal || metadata.type === "client"
