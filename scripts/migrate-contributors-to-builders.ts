@@ -1,9 +1,9 @@
 /**
- * One-time migration: copy agency.contributors rows into the builders plugin DB.
+ * One-time migration: copy contributors rows into the builders plugin DB.
  *
  * Production order:
- *   1. bun run db:migrate:contributors   (while agency.contributors still exists)
- *   2. apply 0003_epic003.sql            (drops agency.contributors)
+ *   1. bun run db:migrate:contributors   (while contributors still exists)
+ *   2. apply 0003_epic003.sql            (drops contributors)
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,7 +46,7 @@ function bioFromLegacy(row: LegacyContributorRow): string | null {
   const parts = [
     row.email ? `Email: ${row.email}` : null,
     `Onboarding: ${row.onboarding_status}`,
-    "Migrated from agency.contributors",
+    "Migrated from contributors",
   ].filter(Boolean);
   return parts.join(" · ");
 }
@@ -56,7 +56,7 @@ async function contributorsTableExists(pool: pg.Pool): Promise<boolean> {
     SELECT EXISTS (
       SELECT 1
       FROM information_schema.tables
-      WHERE table_schema = 'agency' AND table_name = 'contributors'
+      WHERE table_schema = 'public' AND table_name = 'contributors'
     ) AS exists
   `);
   return result.rows[0]?.exists ?? false;
@@ -65,7 +65,7 @@ async function contributorsTableExists(pool: pg.Pool): Promise<boolean> {
 async function loadLegacyContributors(pool: pg.Pool): Promise<LegacyContributorRow[]> {
   const { rows } = await pool.query<LegacyContributorRow>(`
     SELECT id, near_account_id, name, email, onboarding_status
-    FROM agency.contributors
+    FROM contributors
     ORDER BY created_at, id
   `);
   return rows;
@@ -75,9 +75,9 @@ async function loadDistinctNearAccounts(pool: pg.Pool): Promise<string[]> {
   const { rows } = await pool.query<{ near_account: string }>(`
     SELECT DISTINCT near_account
     FROM (
-      SELECT near_account FROM agency.project_contributors
+      SELECT near_account FROM project_contributors
       UNION
-      SELECT near_account FROM agency.billings WHERE near_account IS NOT NULL
+      SELECT near_account FROM billings WHERE near_account IS NOT NULL
     ) accounts
     WHERE near_account IS NOT NULL
     ORDER BY near_account
@@ -123,9 +123,9 @@ export async function migrateContributorsToBuilders(options?: {
         source: "contributors",
       });
     }
-    console.log(`Found ${legacyRows.length} row(s) in agency.contributors`);
+    console.log(`Found ${legacyRows.length} row(s) in contributors`);
   } else {
-    console.log("agency.contributors not present — scanning near_account references only");
+    console.log("contributors not present — scanning near_account references only");
   }
 
   const referencedNearAccounts = await loadDistinctNearAccounts(apiPool);
