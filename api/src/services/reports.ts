@@ -13,7 +13,13 @@ export function createReportsService(db: Database, agency: AgencyService, plugin
     generate: (
       context: Record<string, unknown>,
       orgAccountId: string,
-      input: { clientId?: string; projectId?: string; note?: string; startDate?: string; endDate?: string },
+      input: {
+        clientId?: string;
+        projectId?: string;
+        note?: string;
+        startDate?: string;
+        endDate?: string;
+      },
     ) =>
       Effect.gen(function* () {
         let projectIds: string[];

@@ -876,55 +876,55 @@ export function ProjectBudgetPanel({
           <h2 className="font-display text-2xl uppercase tracking-tight font-extrabold leading-tight">
             Audit log
           </h2>
-        {budgetsQuery.isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading budget events...</div>
-        ) : budgetRows.length > 0 ? (
-          <>
-            <div className="space-y-2">
-              {budgetRows.map((a) => (
-                <div
-                  key={a.id}
-                  className="rounded-sm border border-border bg-muted/10 p-3 grid gap-1 sm:grid-cols-[140px_1fr] sm:gap-4"
-                >
-                  <div className="text-xs font-mono text-muted-foreground">
-                    {new Date(a.createdAt).toISOString().slice(0, 19).replace("T", " ")}
-                  </div>
-                  <div className="text-sm break-all space-y-1">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <VerbTag verb={budgetVerb(a.amount, a.relatedBudgetId)} />
-                      <span className="font-mono tabular-nums">
-                        {formatTokenAmount(a.amount, a.tokenId)}
-                      </span>
+          {budgetsQuery.isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading budget events...</div>
+          ) : budgetRows.length > 0 ? (
+            <>
+              <div className="space-y-2">
+                {budgetRows.map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-sm border border-border bg-muted/10 p-3 grid gap-1 sm:grid-cols-[140px_1fr] sm:gap-4"
+                  >
+                    <div className="text-xs font-mono text-muted-foreground">
+                      {new Date(a.createdAt).toISOString().slice(0, 19).replace("T", " ")}
                     </div>
-                    {a.note && <div className="text-xs text-muted-foreground">{a.note}</div>}
-                    <div className="text-xs text-muted-foreground font-mono">
-                      by {a.actorAccountId}
+                    <div className="text-sm break-all space-y-1">
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <VerbTag verb={budgetVerb(a.amount, a.relatedBudgetId)} />
+                        <span className="font-mono tabular-nums">
+                          {formatTokenAmount(a.amount, a.tokenId)}
+                        </span>
+                      </div>
+                      {a.note && <div className="text-xs text-muted-foreground">{a.note}</div>}
+                      <div className="text-xs text-muted-foreground font-mono">
+                        by {a.actorAccountId}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-            {budgetsQuery.hasNextPage && (
-              <div className="flex justify-center pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => budgetsQuery.fetchNextPage()}
-                  disabled={budgetsQuery.isFetchingNextPage}
-                >
-                  {budgetsQuery.isFetchingNextPage ? "loading..." : "load more"}
-                </Button>
+                ))}
               </div>
-            )}
-          </>
-        ) : (
-          <Card>
-            <CardContent className="p-6 text-center text-sm text-muted-foreground">
-              No budget events recorded yet.
-            </CardContent>
-          </Card>
-        )}
-      </section>
+              {budgetsQuery.hasNextPage && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => budgetsQuery.fetchNextPage()}
+                    disabled={budgetsQuery.isFetchingNextPage}
+                  >
+                    {budgetsQuery.isFetchingNextPage ? "loading..." : "load more"}
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No budget events recorded yet.
+              </CardContent>
+            </Card>
+          )}
+        </section>
       )}
     </div>
   );
