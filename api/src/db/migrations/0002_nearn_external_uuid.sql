@@ -1,1 +1,1 @@
-ALTER TABLE "listings" ADD COLUMN IF NOT EXISTS "external_uuid" text;
+ALTER TABLE "agency"."listings" ADD COLUMN "external_uuid" text;

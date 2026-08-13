@@ -3,14 +3,16 @@ import {
   boolean,
   index,
   integer,
-  pgTable,
+  pgSchema,
   primaryKey,
   text,
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const applications = pgTable(
+export const agency = pgSchema("agency");
+
+export const applications = agency.table(
   "applications",
   {
     id: text("id").primaryKey(),
@@ -38,7 +40,7 @@ export type Application = typeof applications.$inferSelect;
 export type NewApplication = typeof applications.$inferInsert;
 
 // Listings keyed to upstream project id; NEARN-sourced rows are a lazy-refresh cache from nearn.io.
-export const listings = pgTable(
+export const listings = agency.table(
   "listings",
   {
     id: text("id").primaryKey(),
@@ -102,7 +104,7 @@ export const listings = pgTable(
 export type Listing = typeof listings.$inferSelect;
 export type NewListing = typeof listings.$inferInsert;
 
-export const clients = pgTable(
+export const clients = agency.table(
   "clients",
   {
     id: text("id").primaryKey(),
@@ -124,7 +126,7 @@ export const clients = pgTable(
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
 
-export const clientProjects = pgTable(
+export const clientProjects = agency.table(
   "client_projects",
   {
     clientId: text("client_id")
@@ -139,7 +141,7 @@ export const clientProjects = pgTable(
   }),
 );
 
-export const projectContributors = pgTable(
+export const projectContributors = agency.table(
   "project_contributors",
   {
     projectId: text("project_id").notNull(),
@@ -154,7 +156,7 @@ export const projectContributors = pgTable(
   }),
 );
 
-export const budgets = pgTable(
+export const budgets = agency.table(
   "budgets",
   {
     id: text("id").primaryKey(),
@@ -177,7 +179,7 @@ export const budgets = pgTable(
 export type Budget = typeof budgets.$inferSelect;
 export type NewBudget = typeof budgets.$inferInsert;
 
-export const billings = pgTable(
+export const billings = agency.table(
   "billings",
   {
     id: text("id").primaryKey(),
@@ -202,7 +204,7 @@ export const billings = pgTable(
 export type Billing = typeof billings.$inferSelect;
 export type NewBilling = typeof billings.$inferInsert;
 
-export const proposals = pgTable(
+export const proposals = agency.table(
   "proposals",
   {
     daoAccountId: text("dao_account_id").notNull(),
@@ -228,7 +230,7 @@ export const proposals = pgTable(
 export type Proposal = typeof proposals.$inferSelect;
 export type NewProposal = typeof proposals.$inferInsert;
 
-export const settings = pgTable("settings", {
+export const settings = agency.table("settings", {
   orgAccountId: text("org_account_id").primaryKey(),
   daoAccountId: text("dao_account_id"),
   nearnAccountId: text("nearn_account_id"),
