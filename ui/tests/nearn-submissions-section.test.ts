@@ -71,7 +71,7 @@ describe("NearnSubmissionsSection — add-contributor CTA", () => {
 
   test("CTA renders only when publicKey is unmatched (mirror of the match badge)", () => {
     expect(source).toMatch(
-      /contributorByNearAccount\.has\(s\.user\.publicKey\)\s*\?[\s\S]*?\+ add contributor/,
+      /contributorByNearAccount\.has\(s\.user\.publicKey\)\s*\?[\s\S]*?\+ add builder/,
     );
   });
 
