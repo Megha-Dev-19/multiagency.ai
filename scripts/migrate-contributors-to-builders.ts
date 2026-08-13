@@ -65,7 +65,7 @@ async function contributorsTableExists(pool: pg.Pool): Promise<boolean> {
 async function loadLegacyContributors(pool: pg.Pool): Promise<LegacyContributorRow[]> {
   const { rows } = await pool.query<LegacyContributorRow>(`
     SELECT id, near_account_id, name, email, onboarding_status
-    FROM contributors
+    FROM agency.contributors
     ORDER BY created_at, id
   `);
   return rows;
@@ -75,9 +75,9 @@ async function loadDistinctNearAccounts(pool: pg.Pool): Promise<string[]> {
   const { rows } = await pool.query<{ near_account: string }>(`
     SELECT DISTINCT near_account
     FROM (
-      SELECT near_account FROM project_contributors
+      SELECT near_account FROM agency.project_contributors
       UNION
-      SELECT near_account FROM billings WHERE near_account IS NOT NULL
+      SELECT near_account FROM agency.billings WHERE near_account IS NOT NULL
     ) accounts
     WHERE near_account IS NOT NULL
     ORDER BY near_account
